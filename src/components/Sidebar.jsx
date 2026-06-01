@@ -19,15 +19,7 @@ export default function Sidebar({ user, activeTab, setActiveTab }) {
       flexDirection: 'column', flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.06)'
     }}>
       <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-          <div style={{ width: '28px', height: '28px', background: 'var(--coral)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: 'white', fontSize: '14px', fontWeight: '700' }}>N</span>
-          </div>
-          <div>
-            <div style={{ color: 'white', fontSize: '14px', fontWeight: '600' }}>Noatum</div>
-            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Logistics</div>
-          </div>
-        </div>
+        <img src="/logo-white.png" alt="Noatum Logistics" style={{ height: '28px', marginBottom: '16px', display: 'block' }} />
         <div style={{
           background: 'rgba(232,69,44,0.12)', border: '1px solid rgba(232,69,44,0.25)',
           borderRadius: '6px', padding: '5px 10px',
@@ -37,7 +29,7 @@ export default function Sidebar({ user, activeTab, setActiveTab }) {
         </div>
       </div>
 
-      <nav style={{ flex: 1, padding: '12px 12px' }}>
+      <nav style={{ flex: 1, padding: '12px' }}>
         {NAV.map(item => {
           const Icon = item.icon;
           const active = activeTab === item.id;
@@ -64,13 +56,13 @@ export default function Sidebar({ user, activeTab, setActiveTab }) {
       <div style={{ padding: '16px 12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', marginBottom: '8px' }}>
           <div style={{
-            width: '32px', height: '32px', borderRadius: '50%',
-            background: 'var(--coral)', display: 'flex', alignItems: 'center',
+            width: '34px', height: '34px', borderRadius: '50%',
+            background: '#E8452C', display: 'flex', alignItems: 'center',
             justifyContent: 'center', color: 'white', fontSize: '12px', fontWeight: '600', flexShrink: 0
           }}>{user.initials}</div>
           <div style={{ overflow: 'hidden' }}>
             <div style={{ color: 'white', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
-            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Commercial</div>
+            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px' }}>Commercial</div>
           </div>
         </div>
         <button onClick={handleLogout} style={{
