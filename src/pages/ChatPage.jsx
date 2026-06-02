@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Bot, User, AlertCircle, Sparkles } from 'lucide-react';
-import { getNORAContext, updateRecord, getRecords } from '../airtable';
+import { Send, Loader2, Sparkles, User, AlertCircle } from 'lucide-react';
+import { getNORAContext } from '../airtable';
+
+const N8N_CHAT_URL = 'https://roadnlmx.app.n8n.cloud/webhook/nora-chat';
 
 const SUGGESTED = [
   'Show me all active carriers',
@@ -13,7 +15,7 @@ const SUGGESTED = [
 
 function buildSystemPrompt(context) {
   const carriersText = context.carriers.map(c =>
-    `- ${c.Name || c.name}: email=${c.Email || c.email || 'N/A'}, equipment=${c['Equipment Types'] || c.equipment || 'N/A'}, yards=${c.Yards || c.yards || 'N/A'}, language=${c.Language || 'N/A'}, status=${c.Status || c.status || 'active'}`
+    `- ${c.Name || c.name || 'Unknown'}: email=${c.Email || c.email || 'N/A'}, equipment=${c['Equipment Types'] || c.equipment || 'N/A'}, yards=${c.Yards || c.yards || 'N/A'}, language=${c.Language || 'N/A'}, status=${c.Status || c.status || 'active'}`
   ).join('\n');
 
   const quotesText = context.quotes.slice(0, 50).map(q =>
@@ -28,7 +30,7 @@ function buildSystemPrompt(context) {
 
 ## YOUR PERSONALITY
 - Professional, concise, and data-driven
-- Speak in English always
+- Always respond in English
 - When showing data, use clear tables or lists
 - Give actionable insights, not just raw data
 - You know the freight industry deeply
@@ -56,15 +58,14 @@ ${historicalText || 'No historical rates found'}
 - Use markdown tables when showing multiple carriers or rates
 - Use bullet points for lists
 - Bold important numbers and carrier names
-- Keep responses focused and actionable
-- If asked to update data, explain what you would change and ask for confirmation`;
+- Keep responses focused and actionable`;
 }
 
 export default function ChatPage({ user }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: `Hi ${user.name.split(' ')[0]}! I'm NORA, your rate analyzer. I have live access to your carriers, quotes, and historical rates in Airtable.\n\nWhat would you like to know?`,
+      content: `Hi ${user.name.split(' ')[0]}! I'm NORA, your rate analyzer. I have live access to your carriers, quotes, and historical rates.\n\nWhat would you like to know?`,
     }
   ]);
   const [input, setInput] = useState('');
@@ -73,15 +74,9 @@ export default function ChatPage({ user }) {
   const [context, setContext] = useState(null);
   const [error, setError] = useState('');
   const bottomRef = useRef(null);
-  const textareaRef = useRef(null);
 
-  useEffect(() => {
-    loadContext();
-  }, []);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useEffect(() => { loadContext(); }, []);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   async function loadContext() {
     setLoadingContext(true);
@@ -89,7 +84,7 @@ export default function ChatPage({ user }) {
       const ctx = await getNORAContext();
       setContext(ctx);
     } catch (e) {
-      setError('Could not load Airtable data. Check your API token.');
+      setError('Could not load Airtable data.');
     } finally {
       setLoadingContext(false);
     }
@@ -106,27 +101,20 @@ export default function ChatPage({ user }) {
     setError('');
 
     try {
-      const systemPrompt = context ? buildSystemPrompt(context) : 'You are NORA, the Noatum Logistics rate analyzer. Airtable data is currently unavailable.';
+      const systemPrompt = context ? buildSystemPrompt(context) : 'You are NORA, the Noatum Logistics rate analyzer.';
 
-      const apiMessages = newMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-      }));
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch(N8N_CHAT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
+          message: text,
           system: systemPrompt,
-          messages: apiMessages,
         }),
       });
 
-      const data = await response.json();
-      const reply = data.content?.map(c => c.text || '').join('') || 'Sorry, I could not process that request.';
-
+      const data = await res.json();
+      // n8n Basic LLM Chain returns { text: "..." }
+      const reply = data.text || data.output || data.response || JSON.stringify(data);
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
     } catch (e) {
       setError('Connection error. Please try again.');
@@ -148,10 +136,7 @@ export default function ChatPage({ user }) {
       {/* Header */}
       <div style={{ padding: '24px 0 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '40px', height: '40px', borderRadius: '10px',
-            background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Sparkles size={18} style={{ color: '#E8452C' }} />
           </div>
           <div>
@@ -171,19 +156,16 @@ export default function ChatPage({ user }) {
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-        {messages.map((msg, i) => (
-          <MessageBubble key={i} msg={msg} />
-        ))}
+        {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
 
         {loading && (
           <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
             <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <Sparkles size={14} style={{ color: '#E8452C' }} />
             </div>
-            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '12px 16px', display: 'flex', gap: '6px', alignItems: 'center' }}>
-              {[0, 1, 2].map(i => (
-                <div key={i} style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--text-muted)', animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px 18px', display: 'flex', gap: '5px', alignItems: 'center' }}>
+              {[0,1,2].map(i => (
+                <div key={i} style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--text-muted)', animation: `bounce 1.2s ease-in-out ${i*0.2}s infinite` }} />
               ))}
             </div>
           </div>
@@ -195,11 +177,10 @@ export default function ChatPage({ user }) {
             <span style={{ fontSize: '13px', color: '#991b1b' }}>{error}</span>
           </div>
         )}
-
         <div ref={bottomRef} />
       </div>
 
-      {/* Suggested questions - only show at start */}
+      {/* Suggested questions */}
       {messages.length === 1 && (
         <div style={{ flexShrink: 0, paddingBottom: '12px' }}>
           <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>Suggested</p>
@@ -223,14 +204,10 @@ export default function ChatPage({ user }) {
         <div style={{
           display: 'flex', gap: '10px', alignItems: 'flex-end',
           background: 'var(--bg-card)', border: '1px solid var(--border)',
-          borderRadius: '12px', padding: '10px 10px 10px 16px',
-          boxShadow: 'var(--shadow-sm)'
+          borderRadius: '12px', padding: '10px 10px 10px 16px', boxShadow: 'var(--shadow-sm)'
         }}>
           <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
+            value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
             placeholder="Ask NORA anything about your carriers, rates, or lanes..."
             rows={1}
             style={{
@@ -239,27 +216,23 @@ export default function ChatPage({ user }) {
               fontFamily: 'var(--font)', lineHeight: '1.5', maxHeight: '120px', overflowY: 'auto'
             }}
           />
-          <button
-            onClick={() => sendMessage(input)}
-            disabled={!input.trim() || loading}
-            style={{
-              width: '36px', height: '36px', borderRadius: '8px', border: 'none',
-              background: input.trim() ? '#E8452C' : 'var(--border)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: input.trim() ? 'pointer' : 'not-allowed', transition: 'all 150ms', flexShrink: 0
-            }}
-          >
+          <button onClick={() => sendMessage(input)} disabled={!input.trim() || loading} style={{
+            width: '36px', height: '36px', borderRadius: '8px', border: 'none',
+            background: input.trim() ? '#E8452C' : 'var(--border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: input.trim() ? 'pointer' : 'not-allowed', transition: 'all 150ms', flexShrink: 0
+          }}>
             <Send size={15} style={{ color: input.trim() ? 'white' : 'var(--text-muted)' }} />
           </button>
         </div>
         <p style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '8px' }}>
-          Press Enter to send · Shift+Enter for new line
+          Enter to send · Shift+Enter for new line
         </p>
       </div>
 
       <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
+        @keyframes spin { from{transform:rotate(0deg)}to{transform:rotate(360deg)} }
+        @keyframes bounce { 0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)} }
       `}</style>
     </div>
   );
@@ -267,11 +240,8 @@ export default function ChatPage({ user }) {
 
 function MessageBubble({ msg }) {
   const isUser = msg.role === 'user';
-
-  // Simple markdown-like rendering
   const rendered = msg.content
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code style="background:rgba(27,42,74,0.08);padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px">$1</code>')
     .split('\n').join('<br/>');
 
@@ -282,23 +252,15 @@ function MessageBubble({ msg }) {
         background: isUser ? '#E8452C' : 'var(--navy)',
         display: 'flex', alignItems: 'center', justifyContent: 'center'
       }}>
-        {isUser
-          ? <User size={14} style={{ color: 'white' }} />
-          : <Sparkles size={14} style={{ color: '#E8452C' }} />
-        }
+        {isUser ? <User size={14} style={{ color: 'white' }} /> : <Sparkles size={14} style={{ color: '#E8452C' }} />}
       </div>
       <div style={{
-        maxWidth: '75%',
-        background: isUser ? '#E8452C' : 'var(--bg-card)',
+        maxWidth: '75%', background: isUser ? '#E8452C' : 'var(--bg-card)',
         border: isUser ? 'none' : '1px solid var(--border)',
         borderRadius: isUser ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
-        padding: '12px 16px',
-        fontSize: '14px', lineHeight: '1.6',
-        color: isUser ? 'white' : 'var(--text-primary)',
-        boxShadow: 'var(--shadow-sm)'
-      }}
-        dangerouslySetInnerHTML={{ __html: rendered }}
-      />
+        padding: '12px 16px', fontSize: '14px', lineHeight: '1.6',
+        color: isUser ? 'white' : 'var(--text-primary)', boxShadow: 'var(--shadow-sm)'
+      }} dangerouslySetInnerHTML={{ __html: rendered }} />
     </div>
   );
 }
