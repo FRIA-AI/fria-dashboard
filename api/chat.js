@@ -7,27 +7,47 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { message, history, system } = req.body;
+    const { history, system } = req.body;
 
-    // Build conversation context for n8n
-    // We append the history to the system prompt so Basic LLM Chain has full context
-    const historyText = history && history.length > 1
-      ? '\n\n## CONVERSATION HISTORY (most recent last)\n' +
-        history.slice(0, -1).map(m => `${m.role === 'user' ? 'User' : 'NORA'}: ${m.content}`).join('\n')
-      : '';
+    // Anthropic requires messages to start with 'user' role
+    // Filter out the initial assistant greeting and ensure proper alternation
+    let messages = (history || []).filter(m => m.role === 'user' || m.role === 'assistant');
+    
+    // Drop leading assistant messages
+    while (messages.length > 0 && messages[0].role === 'assistant') {
+      messages = messages.slice(1);
+    }
 
-    const response = await fetch('https://roadnlmx.app.n8n.cloud/webhook/nora-chat', {
+    // Ensure we have at least one message
+    if (messages.length === 0) {
+      return res.status(400).json({ error: 'No messages provided' });
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
       body: JSON.stringify({
-        message,
-        system: system + historyText,
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1024,
+        system: system,
+        messages: messages,
       }),
     });
 
     const data = await response.json();
-    return res.status(200).json(data);
+    
+    if (data.error) {
+      console.error('Anthropic error:', data.error);
+      return res.status(500).json({ error: data.error.message });
+    }
+
+    const text = data.content?.[0]?.text || 'Sorry, I could not process that.';
+    return res.status(200).json({ text });
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to reach n8n', details: error.message });
+    return res.status(500).json({ error: 'Failed to reach Anthropic', details: error.message });
   }
 }
