@@ -1,10 +1,11 @@
-import { LogOut, Send, BarChart2, Clock } from 'lucide-react';
+import { LogOut, Send, BarChart2, Clock, MessageSquare } from 'lucide-react';
 import { logout } from '../auth';
 
 const NAV = [
   { id: 'rfq',     label: 'New Quote',  icon: Send,      adminOnly: false },
   { id: 'history', label: 'My History', icon: Clock,     adminOnly: false },
-  { id: 'metrics', label: 'Metrics',    icon: BarChart2, adminOnly: true  },
+  { id: 'chat',    label: 'Chat with NORA', icon: MessageSquare, adminOnly: true  },
+  { id: 'metrics', label: 'Metrics',      icon: BarChart2,     adminOnly: true  },
 ];
 
 export default function Sidebar({ user, activeTab, setActiveTab }) {
