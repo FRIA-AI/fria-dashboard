@@ -103,17 +103,20 @@ export default function ChatPage({ user }) {
     try {
       const systemPrompt = context ? buildSystemPrompt(context) : 'You are NORA, the Noatum Logistics rate analyzer.';
 
+      // Send full conversation history so NORA has memory
+      const history = newMessages.map(m => ({ role: m.role, content: m.content }));
+
       const res = await fetch(N8N_CHAT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
+          history: history,
           system: systemPrompt,
         }),
       });
 
       const data = await res.json();
-      // n8n Basic LLM Chain returns { text: "..." }
       const reply = data.text || data.output || data.response || JSON.stringify(data);
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
     } catch (e) {
