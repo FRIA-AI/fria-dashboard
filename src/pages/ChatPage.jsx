@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Sparkles, User, AlertCircle } from 'lucide-react';
 import { getNORAContext } from '../airtable';
 
-const N8N_CHAT_URL = 'https://roadnlmx.app.n8n.cloud/webhook/nora-chat';
+const N8N_CHAT_URL = '/api/chat';
 
 const SUGGESTED = [
   'Show me all active carriers',
