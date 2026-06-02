@@ -3,7 +3,7 @@ import { Upload, FileText, Table, CheckCircle2, AlertCircle, Loader2, X } from '
 import { getRecords } from '../airtable';
 import { useState as useStateEffect, useEffect } from 'react';
 
-const WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/nora-tarifarios';
+const WEBHOOK_URL = '/api/tarifarios';
 
 export default function RateCardsPage({ user }) {
   const [carriers, setCarriers] = useState([]);
