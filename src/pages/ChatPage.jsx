@@ -15,7 +15,7 @@ const SUGGESTED = [
 
 function buildSystemPrompt(context) {
   const carriersText = context.carriers.map(c =>
-    `- ${c.Name || c.name || 'Unknown'}: email=${c.Email || c.email || 'N/A'}, equipment=${c['Equipment Types'] || c.equipment || 'N/A'}, yards=${c.Yards || c.yards || 'N/A'}, language=${c.Language || 'N/A'}, status=${c.Status || c.status || 'active'}`
+    `- ${c['Carrier Name'] || 'Unknown'}: equipment=${c['Equipment Type'] || 'N/A'}, yards=${c['Yards'] || 'N/A'}, email=${c['Main Email'] || 'N/A'}, language=${c['Language'] || 'N/A'}, status=${c['Active/Inactive'] || 'active'}, routes=${c['Routes (Lanes)'] || 'N/A'}, service=${c['Service Type'] || 'N/A'}`
   ).join('\n');
 
   const quotesText = context.quotes.slice(0, 50).map(q =>
