@@ -21,11 +21,11 @@ function buildSystemPrompt(context) {
     return `- ${c['Carrier Name'] || 'Unknown'}: equipment=${equipment}, yards=${yards}, email=${c['Main Email'] || 'N/A'}, language=${c['Language'] || 'N/A'}, status=${c['Active/Inactive'] || 'active'}, service=${service}`;
   }).join('\n');
 
-  const quotesText = context.quotes.slice(0, 50).map(q =>
+  const quotesText = context.quotes.map(q =>
     `- ${q['Carrier Name'] || q.carrier || 'Unknown'}: ${q.Origin || q.origin} → ${q.Destination || q.destination}, ${q.Equipment || q.equipment}, ${q.Currency || 'MXN'} ${q.Price || q.price}, date=${q['Response Date'] || q.date || 'N/A'}`
   ).join('\n');
 
-  const historicalText = context.historical.slice(0, 50).map(h =>
+  const historicalText = context.historical.map(h =>
     `- ${h['Carrier Name'] || h.carrier || 'Unknown'}: ${h.Origin || h.origin} → ${h.Destination || h.destination}, ${h.Equipment || h.equipment}, ${h.Currency || 'MXN'} ${h.Price || h.price}, transit=${h['Transit Time'] || 'N/A'}`
   ).join('\n');
 

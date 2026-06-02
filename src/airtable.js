@@ -7,13 +7,26 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-export async function getRecords(table, filterFormula = '', maxRecords = 100) {
-  let url = `${API}/${BASE_ID}/${encodeURIComponent(table)}?maxRecords=${maxRecords}`;
-  if (filterFormula) url += `&filterByFormula=${encodeURIComponent(filterFormula)}`;
-  const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`Airtable error: ${res.status}`);
-  const data = await res.json();
-  return data.records.map(r => ({ id: r.id, ...r.fields }));
+// Fetch ALL records using pagination (Airtable returns max 100 per page)
+export async function getRecords(table, filterFormula = '') {
+  let allRecords = [];
+  let offset = null;
+
+  do {
+    let url = `${API}/${BASE_ID}/${encodeURIComponent(table)}?pageSize=100`;
+    if (filterFormula) url += `&filterByFormula=${encodeURIComponent(filterFormula)}`;
+    if (offset) url += `&offset=${offset}`;
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`Airtable error: ${res.status}`);
+    const data = await res.json();
+
+    const records = data.records.map(r => ({ id: r.id, ...r.fields }));
+    allRecords = [...allRecords, ...records];
+    offset = data.offset || null;
+  } while (offset);
+
+  return allRecords;
 }
 
 export async function updateRecord(table, recordId, fields) {
@@ -39,9 +52,9 @@ export async function createRecord(table, fields) {
 // Fetch all key data for NORA context
 export async function getNORAContext() {
   const [carriers, quotes, historical] = await Promise.all([
-    getRecords('Carriers', '', 200).catch(() => []),
-    getRecords('Quotes', '', 200).catch(() => []),
-    getRecords('Historical Rates', '', 200).catch(() => []),
+    getRecords('Carriers').catch(() => []),
+    getRecords('Quotes').catch(() => []),
+    getRecords('Historical Rates').catch(() => []),
   ]);
   return { carriers, quotes, historical };
 }
