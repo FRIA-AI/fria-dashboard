@@ -6,6 +6,7 @@ import RFQPage from './pages/RFQPage';
 import HistoryPage from './pages/HistoryPage';
 import MetricsPage from './pages/MetricsPage';
 import ChatPage from './pages/ChatPage';
+import RateCardsPage from './pages/RateCardsPage';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -28,10 +29,11 @@ export default function App() {
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar user={user} activeTab={activeTab} setActiveTab={setActiveTab} />
       <main style={{ flex: 1, overflowY: activeTab === 'chat' ? 'hidden' : 'auto', background: 'var(--bg)' }}>
-        {activeTab === 'rfq'     && <RFQPage user={user} />}
-        {activeTab === 'history' && <HistoryPage user={user} />}
-        {activeTab === 'metrics' && <MetricsPage user={user} />}
-        {activeTab === 'chat'    && <ChatPage user={user} />}
+        {activeTab === 'rfq'       && <RFQPage user={user} />}
+        {activeTab === 'history'   && <HistoryPage user={user} />}
+        {activeTab === 'metrics'   && <MetricsPage user={user} />}
+        {activeTab === 'chat'      && <ChatPage user={user} />}
+        {activeTab === 'ratecards' && <RateCardsPage user={user} />}
       </main>
     </div>
   );
