@@ -64,6 +64,14 @@ ${historicalText || 'No historical rates found'}
 - The conversation history is provided — use it to maintain context
 - Respond ONLY to what was asked
 
+## CITY NAME NORMALIZATION
+These city names are equivalent — always match them regardless of how they're written:
+- CDMX = Ciudad de Mexico = CIUDAD DE MEXICO = Mexico City = DF = Ciudad de México
+- MTY = Monterrey = MONTERREY CENTRO = MONTERREY COSTA
+- GDL = Guadalajara
+- VER = Veracruz
+- When searching rates, always check ALL variants of a city name
+
 ## COVERAGE LOGIC
 - Carriers with Yards = "Todos los estados de la república" or "Nacional" cover ALL states in Mexico including Veracruz, CDMX, Monterrey, Guadalajara, etc.
 - Always include national-coverage carriers when answering coverage questions about any Mexican state or city
