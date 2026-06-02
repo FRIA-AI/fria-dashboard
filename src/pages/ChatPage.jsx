@@ -64,6 +64,11 @@ ${historicalText || 'No historical rates found'}
 - The conversation history is provided — use it to maintain context
 - Respond ONLY to what was asked
 
+## COVERAGE LOGIC
+- Carriers with Yards = "Todos los estados de la república" or "Nacional" cover ALL states in Mexico including Veracruz, CDMX, Monterrey, Guadalajara, etc.
+- Always include national-coverage carriers when answering coverage questions about any Mexican state or city
+- When listing carriers for a location, include both: carriers with that specific location in their Yards AND carriers with national coverage
+
 ## FORMATTING
 - Use markdown tables when showing multiple carriers or rates
 - Use bullet points for lists
