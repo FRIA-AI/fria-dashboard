@@ -2,9 +2,9 @@ import { LogOut, Send, BarChart2, Clock } from 'lucide-react';
 import { logout } from '../auth';
 
 const NAV = [
-  { id: 'rfq',     label: 'New Quote',  icon: Send },
-  { id: 'history', label: 'My History', icon: Clock },
-  { id: 'metrics', label: 'Metrics',    icon: BarChart2 },
+  { id: 'rfq',     label: 'New Quote',  icon: Send,      adminOnly: false },
+  { id: 'history', label: 'My History', icon: Clock,     adminOnly: false },
+  { id: 'metrics', label: 'Metrics',    icon: BarChart2, adminOnly: true  },
 ];
 
 export default function Sidebar({ user, activeTab, setActiveTab }) {
@@ -12,6 +12,8 @@ export default function Sidebar({ user, activeTab, setActiveTab }) {
     logout();
     window.location.reload();
   }
+
+  const visibleNav = NAV.filter(item => !item.adminOnly || user.role === 'admin');
 
   return (
     <aside style={{
@@ -21,30 +23,30 @@ export default function Sidebar({ user, activeTab, setActiveTab }) {
       <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <img src="/logo-white.png" alt="Noatum Logistics" style={{ height: '28px', marginBottom: '16px', display: 'block' }} />
         <div style={{
-          background: 'rgba(232,69,44,0.12)', border: '1px solid rgba(232,69,44,0.25)',
+          background: 'rgba(232,69,44,0.1)', border: '1px solid rgba(232,69,44,0.2)',
           borderRadius: '6px', padding: '5px 10px',
-          color: 'rgba(255,255,255,0.7)', fontSize: '11px', fontWeight: '500', letterSpacing: '0.04em'
+          color: 'rgba(255,255,255,0.6)', fontSize: '11px', fontWeight: '500', letterSpacing: '0.04em'
         }}>
           NORA · Rate Analyzer
         </div>
       </div>
 
       <nav style={{ flex: 1, padding: '12px' }}>
-        {NAV.map(item => {
+        {visibleNav.map(item => {
           const Icon = item.icon;
           const active = activeTab === item.id;
           return (
             <button key={item.id} onClick={() => setActiveTab(item.id)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
               padding: '10px 12px', borderRadius: 'var(--radius-md)', border: 'none',
-              background: active ? 'rgba(232,69,44,0.18)' : 'transparent',
-              color: active ? '#ff8570' : 'rgba(255,255,255,0.5)',
+              background: active ? 'rgba(232,69,44,0.12)' : 'transparent',
+              color: active ? '#E8452C' : 'rgba(255,255,255,0.45)',
               fontSize: '13px', fontWeight: active ? '600' : '400',
               cursor: 'pointer', transition: 'all var(--transition)', textAlign: 'left',
               marginBottom: '2px', fontFamily: 'var(--font)'
             }}
-            onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}}
-            onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}}
+            onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}}
+            onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; }}}
             >
               <Icon size={16} />
               {item.label}
@@ -62,17 +64,19 @@ export default function Sidebar({ user, activeTab, setActiveTab }) {
           }}>{user.initials}</div>
           <div style={{ overflow: 'hidden' }}>
             <div style={{ color: 'white', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
-            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px' }}>Commercial</div>
+            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px' }}>
+              {user.role === 'admin' ? 'Manager' : 'Commercial'}
+            </div>
           </div>
         </div>
         <button onClick={handleLogout} style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
           padding: '9px 12px', borderRadius: 'var(--radius-md)', border: 'none',
-          background: 'transparent', color: 'rgba(255,255,255,0.35)',
+          background: 'transparent', color: 'rgba(255,255,255,0.3)',
           fontSize: '13px', cursor: 'pointer', transition: 'all var(--transition)', fontFamily: 'var(--font)'
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.3)'; }}
         >
           <LogOut size={15} /> Sign out
         </button>
