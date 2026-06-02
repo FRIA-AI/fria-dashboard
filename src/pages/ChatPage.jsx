@@ -89,6 +89,11 @@ export default function ChatPage({ user }) {
     setLoadingContext(true);
     try {
       const ctx = await getNORAContext();
+      // DEBUG: log first carrier to see exact field names
+      if (ctx.carriers.length > 0) {
+        console.log('CARRIER FIELDS:', JSON.stringify(Object.keys(ctx.carriers[0])));
+        console.log('CARRIER SAMPLE:', JSON.stringify(ctx.carriers[0]));
+      }
       setContext(ctx);
     } catch (e) {
       setError('Could not load Airtable data.');
