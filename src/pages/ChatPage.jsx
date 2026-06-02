@@ -14,9 +14,12 @@ const SUGGESTED = [
 ];
 
 function buildSystemPrompt(context) {
-  const carriersText = context.carriers.map(c =>
-    `- ${c['Carrier Name'] || 'Unknown'}: equipment=${c['Equipment Type'] || 'N/A'}, yards=${c['Yards'] || 'N/A'}, email=${c['Main Email'] || 'N/A'}, language=${c['Language'] || 'N/A'}, status=${c['Active/Inactive'] || 'active'}, routes=${c['Routes (Lanes)'] || 'N/A'}, service=${c['Service Type'] || 'N/A'}`
-  ).join('\n');
+  const carriersText = context.carriers.map(c => {
+    const yards = (c['Yards'] || 'N/A').replace(/\n/g, ', ').trim();
+    const equipment = Array.isArray(c['Equipment Types']) ? c['Equipment Types'].join(', ') : (c['Equipment Types'] || 'N/A');
+    const service = Array.isArray(c['Service Type']) ? c['Service Type'].join(', ') : (c['Service Type'] || 'N/A');
+    return `- ${c['Carrier Name'] || 'Unknown'}: equipment=${equipment}, yards=${yards}, email=${c['Main Email'] || 'N/A'}, language=${c['Language'] || 'N/A'}, status=${c['Active/Inactive'] || 'active'}, service=${service}`;
+  }).join('\n');
 
   const quotesText = context.quotes.slice(0, 50).map(q =>
     `- ${q['Carrier Name'] || q.carrier || 'Unknown'}: ${q.Origin || q.origin} → ${q.Destination || q.destination}, ${q.Equipment || q.equipment}, ${q.Currency || 'MXN'} ${q.Price || q.price}, date=${q['Response Date'] || q.date || 'N/A'}`
