@@ -153,7 +153,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No messages provided' });
     }
 
-    // If user approved a write tool call, inject the tool result
     if (approved_tool_call) {
       const toolResult = await executeToolCall(approved_tool_call);
       messages = [
@@ -210,7 +209,6 @@ export default async function handler(req, res) {
 
     if (toolUseBlock) {
 
-      // READ-ONLY tools: execute immediately, send result back to Claude for natural response
       if (READ_ONLY_TOOLS.includes(toolUseBlock.name)) {
         const toolResult = await executeToolCall({
           tool_use_id: toolUseBlock.id,
@@ -254,7 +252,6 @@ export default async function handler(req, res) {
         return res.status(200).json({ type: 'text', text: finalText });
       }
 
-      // show_action_plan: return plan to frontend for user approval
       if (toolUseBlock.name === 'show_action_plan') {
         return res.status(200).json({
           type: 'action_plan',
@@ -265,7 +262,6 @@ export default async function handler(req, res) {
         });
       }
 
-      // All other write tools: require approval
       return res.status(200).json({
         type: 'pending_approval',
         tool_name: toolUseBlock.name,
@@ -275,7 +271,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Normal text response
     const text = textBlock?.text || 'Sorry, I could not process that.';
     return res.status(200).json({ type: 'text', text });
 
@@ -288,9 +283,7 @@ export default async function handler(req, res) {
 // Execute a tool call
 async function executeToolCall(toolCall) {
   const { name, input } = toolCall;
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000';
+  const baseUrl = 'https://nora-dashboard-swart.vercel.app';
 
   try {
     const res = await fetch(`${baseUrl}/api/nora-actions`, {
