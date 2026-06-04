@@ -19,6 +19,7 @@ export const USERS = [
   { id: 'dowdin',       name: 'Dowdin Juarez',      email: 'dowdin.juarez@noatumlogistics.com',         password: 'DowdinNL',     initials: 'DJ', role: 'commercial' },
   { id: 'jacquenajera', name: 'Jacqueline Najera',  email: 'jacqueline.najera@noatumlogistics.com',     password: 'JacqueNL',     initials: 'JN', role: 'commercial' },
   { id: 'mario',        name: 'Mario Martinez',     email: 'mario.martinez@noatumlogistics.com',        password: 'MarioNL',      initials: 'MM', role: 'commercial' },
+{ id: 'laura',        name: 'Laura Angel',        email: 'laura.angel@noatumlogistics.com',           password: 'LauraNL',      initials: 'LA', role: 'commercial' },
 ];
 
 export function login(email, password) {
