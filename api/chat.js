@@ -1,13 +1,13 @@
 // NORA Chat API — with Tool Calling support
-// Tools: request_quote, get_quotes_by_lane, add_carrier, update_carrier,
-//        create_historical_rate, execute_n8n_workflow, show_action_plan
+// Read-only tools execute immediately, write tools require approval
 
 const NORA_TOOLS = [
   {
     name: 'show_action_plan',
-    description: `Use this tool BEFORE executing any action that modifies data or triggers workflows.
+    description: `Use this tool BEFORE executing any action that MODIFIES data or triggers workflows.
 Present a clear plan of what you are about to do and wait for user approval.
-Always use this when: adding/updating carriers, creating rates, triggering RFQs, modifying workflows.`,
+Use ONLY for: adding/updating carriers, creating rates, triggering RFQs, modifying workflows.
+Do NOT use for read-only queries like get_quotes_by_lane.`,
     input_schema: {
       type: 'object',
       properties: {
@@ -33,7 +33,7 @@ Always use this when: adding/updating carriers, creating rates, triggering RFQs,
   },
   {
     name: 'request_quote',
-    description: 'Trigger an RFQ to carriers via n8n Workflow 1. Use after user approves the action plan.',
+    description: 'Trigger an RFQ to carriers via n8n Workflow 1. Requires show_action_plan first.',
     input_schema: {
       type: 'object',
       properties: {
@@ -48,7 +48,9 @@ Always use this when: adding/updating carriers, creating rates, triggering RFQs,
   },
   {
     name: 'get_quotes_by_lane',
-    description: 'Query Airtable Quotes table filtered by origin and/or destination.',
+    description: `READ-ONLY. Query Airtable for quotes and rates on a specific lane. 
+Execute this tool DIRECTLY without asking for approval — it only reads data, never modifies anything.
+Use this whenever the user asks about rates, prices, quotes, or carrier comparisons for a lane.`,
     input_schema: {
       type: 'object',
       properties: {
@@ -61,7 +63,7 @@ Always use this when: adding/updating carriers, creating rates, triggering RFQs,
   },
   {
     name: 'create_historical_rate',
-    description: 'Save a new rate to Historical Rates in Airtable. Use after user approves.',
+    description: 'Save a new rate to Historical Rates in Airtable. Requires show_action_plan first.',
     input_schema: {
       type: 'object',
       properties: {
@@ -82,7 +84,7 @@ Always use this when: adding/updating carriers, creating rates, triggering RFQs,
   },
   {
     name: 'add_carrier',
-    description: 'Add a new carrier to the Carriers table in Airtable. Use after user approves.',
+    description: 'Add a new carrier to the Carriers table in Airtable. Requires show_action_plan first.',
     input_schema: {
       type: 'object',
       properties: {
@@ -102,22 +104,19 @@ Always use this when: adding/updating carriers, creating rates, triggering RFQs,
   },
   {
     name: 'update_carrier',
-    description: 'Update an existing carrier record in Airtable. Use after user approves.',
+    description: 'Update an existing carrier record in Airtable. Requires show_action_plan first.',
     input_schema: {
       type: 'object',
       properties: {
         carrierName: { type: 'string', description: 'Name to find the carrier' },
-        fields: {
-          type: 'object',
-          description: 'Fields to update as key-value pairs',
-        },
+        fields: { type: 'object', description: 'Fields to update as key-value pairs' },
       },
       required: ['carrierName', 'fields'],
     },
   },
   {
     name: 'execute_n8n_workflow',
-    description: 'Trigger a specific n8n workflow via webhook. Use after user approves.',
+    description: 'Trigger a specific n8n workflow via webhook. Requires show_action_plan first.',
     input_schema: {
       type: 'object',
       properties: {
@@ -132,6 +131,9 @@ Always use this when: adding/updating carriers, creating rates, triggering RFQs,
     },
   },
 ];
+
+// Tools that execute immediately without user approval
+const READ_ONLY_TOOLS = ['get_quotes_by_lane'];
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -151,10 +153,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No messages provided' });
     }
 
-    // If user approved a pending tool call, inject the tool result
+    // If user approved a write tool call, inject the tool result
     if (approved_tool_call) {
       const toolResult = await executeToolCall(approved_tool_call);
-      // Append tool_use + tool_result to messages so Claude can summarize
       messages = [
         ...messages,
         {
@@ -204,30 +205,74 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: data.error.message });
     }
 
-    // Check if Claude wants to use a tool
     const toolUseBlock = data.content?.find(b => b.type === 'tool_use');
     const textBlock = data.content?.find(b => b.type === 'text');
 
     if (toolUseBlock) {
+
+      // READ-ONLY tools: execute immediately, send result back to Claude for natural response
+      if (READ_ONLY_TOOLS.includes(toolUseBlock.name)) {
+        const toolResult = await executeToolCall({
+          tool_use_id: toolUseBlock.id,
+          name: toolUseBlock.name,
+          input: toolUseBlock.input,
+        });
+
+        const followUpMessages = [
+          ...messages,
+          { role: 'assistant', content: data.content },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: toolUseBlock.id,
+                content: JSON.stringify(toolResult),
+              },
+            ],
+          },
+        ];
+
+        const followUp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 4096,
+            system: system,
+            tools: NORA_TOOLS,
+            messages: followUpMessages,
+          }),
+        });
+
+        const followUpData = await followUp.json();
+        const finalText = followUpData.content?.find(b => b.type === 'text')?.text || 'No results found.';
+        return res.status(200).json({ type: 'text', text: finalText });
+      }
+
+      // show_action_plan: return plan to frontend for user approval
       if (toolUseBlock.name === 'show_action_plan') {
-        // Return plan to frontend for user approval — don't execute yet
         return res.status(200).json({
           type: 'action_plan',
           plan: toolUseBlock.input,
           tool_use_id: toolUseBlock.id,
-          pending_tool: null, // no execution needed for show_action_plan
+          pending_tool: null,
           text: textBlock?.text || null,
         });
-      } else {
-        // For all other tools: return to frontend asking for approval
-        return res.status(200).json({
-          type: 'pending_approval',
-          tool_name: toolUseBlock.name,
-          tool_input: toolUseBlock.input,
-          tool_use_id: toolUseBlock.id,
-          text: textBlock?.text || `Ready to execute: **${toolUseBlock.name}**`,
-        });
       }
+
+      // All other write tools: require approval
+      return res.status(200).json({
+        type: 'pending_approval',
+        tool_name: toolUseBlock.name,
+        tool_input: toolUseBlock.input,
+        tool_use_id: toolUseBlock.id,
+        text: textBlock?.text || `Ready to execute: **${toolUseBlock.name}**`,
+      });
     }
 
     // Normal text response
@@ -240,7 +285,7 @@ export default async function handler(req, res) {
   }
 }
 
-// Execute a tool call after user approval
+// Execute a tool call
 async function executeToolCall(toolCall) {
   const { name, input } = toolCall;
   const baseUrl = process.env.VERCEL_URL
