@@ -27,12 +27,12 @@ export default async function handler(req, res) {
   try {
     let result;
     switch (action) {
-      case 'request_quote':       result = await requestQuote(input); break;
-      case 'get_quotes_by_lane':  result = await getQuotesByLane(input); break;
+      case 'request_quote':          result = await requestQuote(input); break;
+      case 'get_quotes_by_lane':     result = await getQuotesByLane(input); break;
       case 'create_historical_rate': result = await createHistoricalRate(input); break;
-      case 'add_carrier':         result = await addCarrier(input); break;
-      case 'update_carrier':      result = await updateCarrier(input); break;
-      case 'execute_n8n_workflow': result = await executeN8nWorkflow(input); break;
+      case 'add_carrier':            result = await addCarrier(input); break;
+      case 'update_carrier':         result = await updateCarrier(input); break;
+      case 'execute_n8n_workflow':   result = await executeN8nWorkflow(input); break;
       default: return res.status(400).json({ error: `Unknown action: ${action}` });
     }
     return res.status(200).json({ success: true, result });
@@ -65,23 +65,25 @@ async function requestQuote({ origin, destination, equipment, notes, userEmail }
 }
 
 async function getQuotesByLane({ origin, destination, equipment, limit = 50 }) {
-  // Build flexible filter:
-  // - Origin/Destination: SEARCH so "AICM" matches "Aeropuerto Ciudad de Mexico AICM"
-  // - Equipment: exact match with ARRAYJOIN so "3.5 Ton" doesn't match "3.5 Ton Hazmat"
-  const buildFormula = (equipmentVal) => {
+  const buildFormula = (equipmentVal, table) => {
     const conditions = [];
     if (origin) conditions.push(`SEARCH(LOWER("${origin}"), LOWER({Origin}))`);
     if (destination) conditions.push(`SEARCH(LOWER("${destination}"), LOWER({Destination}))`);
-    if (equipmentVal) conditions.push(`LOWER(ARRAYJOIN({Equipment}, ",")) = LOWER("${equipmentVal}")`);
+    if (equipmentVal) {
+      if (table === 'Historical Rates') {
+        conditions.push(`LOWER({Equipment}) = LOWER("${equipmentVal}")`);
+      } else {
+        conditions.push(`LOWER(ARRAYJOIN({Equipment}, ",")) = LOWER("${equipmentVal}")`);
+      }
+    }
     if (conditions.length === 0) return '';
     if (conditions.length === 1) return conditions[0];
     return `AND(${conditions.join(',')})`;
   };
 
-  // Query both Historical Rates and Quotes in parallel
   const [historicalRes, quotesRes] = await Promise.all([
-    fetchAirtable('Historical Rates', buildFormula(equipment), limit),
-    fetchAirtable('Quotes', buildFormula(equipment), limit),
+    fetchAirtable('Historical Rates', buildFormula(equipment, 'Historical Rates'), limit),
+    fetchAirtable('Quotes', buildFormula(equipment, 'Quotes'), limit),
   ]);
 
   const historical = historicalRes.map(r => ({
