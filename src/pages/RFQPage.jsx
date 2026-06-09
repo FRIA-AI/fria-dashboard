@@ -24,7 +24,10 @@ export default function RFQPage({ user }) {
     setError('');
     setResult(null);
 
-    const rfqId = `NORA-${Date.now()}-${new Date().getFullYear()}`;
+    const now = new Date();
+const timestamp = now.toISOString().slice(0,19).replace(/[-T:]/g,'');
+const suffix = user.id.slice(0, 4).toUpperCase();
+const rfqId = `NORA-${timestamp}-${suffix}`;
     const lane = extractLane(message);
 
     const payload = {
