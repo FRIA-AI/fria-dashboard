@@ -15,11 +15,12 @@ export const USERS = [
   { id: 'jorge',        name: 'Jorge Perez',        email: 'jorge.perez@noatumlogistics.com',           password: 'JorgeNL',      initials: 'JP', role: 'commercial' },
   { id: 'diana',        name: 'Diana Moreno',       email: 'diana.moreno@noatumlogistics.com',          password: 'DianaNL',      initials: 'DM', role: 'commercial' },
   { id: 'eduardo',      name: 'Eduardo Montiel',    email: 'eduardo.montiel@noatumlogistics.com',       password: 'EduardoNL',    initials: 'EM', role: 'commercial' },
+  { id: 'karlaperdomo', name: 'Karla Perdomo',      email: 'pdkarla@hotmail.com',                       password: 'KPerdomo',     initials: 'KP', role: 'commercial' },
   { id: 'dowdin',       name: 'Dowdin Juarez',      email: 'dowdin.juarez@noatumlogistics.com',         password: 'DowdinNL',     initials: 'DJ', role: 'commercial' },
   { id: 'jacquenajera', name: 'Jacqueline Najera',  email: 'jacqueline.najera@noatumlogistics.com',     password: 'JacqueNL',     initials: 'JN', role: 'commercial' },
   { id: 'mario',        name: 'Mario Martinez',     email: 'mario.martinez@noatumlogistics.com',        password: 'MarioNL',      initials: 'MM', role: 'commercial' },
-{ id: 'laura',        name: 'Laura Angel',        email: 'laura.angel@noatumlogistics.com',           password: 'LauraNL',      initials: 'LA', role: 'commercial' },
-  { id: 'jennifer',        name: 'Jennifer Z',        email: 'jennifer.ziemianski@noatumlogistics.com',           password: 'JenniferNL',      initials: 'JZ', role: 'admin' },
+  { id: 'laura',        name: 'Laura Angel',        email: 'laura.angel@noatumlogistics.com',           password: 'LauraNL',      initials: 'LA', role: 'commercial' },
+  { id: 'jennifer',     name: 'Jennifer Z',         email: 'jennifer.ziemianski@noatumlogistics.com',   password: 'JenniferNL',   initials: 'JZ', role: 'admin' },
 ];
 
 export function login(email, password) {
