@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Send, Loader2, CheckCircle2, AlertCircle, Mail, Clock, ArrowRight } from 'lucide-react';
 import { saveRFQ } from '../store';
 
-const N8N_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fd5bb4ce-a3d1-44e7-986d-c9e84aae3391';
+const N8N_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook-test/fd5bb4ce-a3d1-44e7-986d-c9e84aae3391';
 
 const EXAMPLES = [
   'Necesito cotización para Guadalajara a Monterrey, carga seca en 53 pies, disponible 15 de julio',
