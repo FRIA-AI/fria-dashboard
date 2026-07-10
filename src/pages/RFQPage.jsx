@@ -27,7 +27,7 @@ export default function RFQPage({ user }) {
     const now = new Date();
 const timestamp = now.toISOString().slice(0,19).replace(/[-T:]/g,'');
 const suffix = user.id.slice(0, 4).toUpperCase();
-const rfqId = `NORA-${timestamp}-${suffix}`;
+const rfqId = `FRIA-${timestamp}-${suffix}`;
     const lane = extractLane(message);
 
     const payload = {
