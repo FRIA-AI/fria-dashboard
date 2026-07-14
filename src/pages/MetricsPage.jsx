@@ -4,7 +4,7 @@ import { getMetrics } from '../store';
 export default function MetricsPage({ user }) {
   const metrics = getMetrics();
 
-  const colors = ['var(--coral)', '#1B2A4A', '#3b82f6', '#16a34a', '#d97706', '#7c3aed'];
+  const colors = ['var(--coral)', '#0A0F1F', '#3b82f6', '#16a34a', '#d97706', '#7c3aed'];
 
   const maxUserCount = Math.max(...metrics.byUser.map(u => u.count), 1);
   const maxLaneCount = Math.max(...metrics.byLane.map(l => l.count), 1);
@@ -112,7 +112,7 @@ export default function MetricsPage({ user }) {
 
       {metrics.byUser.some(u => u.name === user.name) && (
         <div style={{
-          marginTop: '18px', background: 'rgba(27,42,74,0.04)',
+          marginTop: '18px', background: 'rgba(10,15,31,0.04)',
           borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', padding: '18px 22px'
         }}>
           <p style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
