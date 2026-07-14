@@ -1,7 +1,9 @@
-// NORA Chat API — with Tool Calling support
+// FRIA Chat API — with Tool Calling support
 // Read-only tools execute immediately, write tools require approval
+// NOTA: este archivo sigue diseñado sobre herramientas de Airtable — pendiente
+// reescribirlo conectado a Supabase cuando se reconstruya Chat (ver Sección 11.4).
 
-const NORA_TOOLS = [
+const FRIA_TOOLS = [
   {
     name: 'show_action_plan',
     description: `Use this tool BEFORE executing any action that MODIFIES data or triggers workflows.
@@ -14,7 +16,7 @@ Do NOT use for read-only queries like get_quotes_by_lane.`,
         title: { type: 'string', description: 'Short title of the action plan' },
         steps: {
           type: 'array',
-          description: 'List of steps NORA will execute',
+          description: 'List of steps FRIA will execute',
           items: {
             type: 'object',
             properties: {
@@ -192,7 +194,7 @@ export default async function handler(req, res) {
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         system: system,
-        tools: NORA_TOOLS,
+        tools: FRIA_TOOLS,
         messages: messages,
       }),
     });
@@ -242,7 +244,7 @@ export default async function handler(req, res) {
             model: 'claude-sonnet-4-6',
             max_tokens: 4096,
             system: system,
-            tools: NORA_TOOLS,
+            tools: FRIA_TOOLS,
             messages: followUpMessages,
           }),
         });
@@ -283,7 +285,7 @@ export default async function handler(req, res) {
 // Execute a tool call
 async function executeToolCall(toolCall) {
   const { name, input } = toolCall;
-  const baseUrl = 'https://nora-dashboard-swart.vercel.app';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:5173';
 
   try {
     const res = await fetch(`${baseUrl}/api/nora-actions`, {
