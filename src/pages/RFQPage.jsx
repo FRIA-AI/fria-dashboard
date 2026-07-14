@@ -68,7 +68,7 @@ const rfqId = `FRIA-${timestamp}-${suffix}`;
       setStatus('success');
       setMessage('');
     } catch (err) {
-      setError('Could not connect to NORA. Check the webhook URL in config.');
+      setError('Could not connect to FRIA. Check the webhook URL in config.');
       setStatus('error');
     }
   }
@@ -94,7 +94,7 @@ const rfqId = `FRIA-${timestamp}-${suffix}`;
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ fontSize: '26px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>New Quote Request</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-          Write your freight request in free text — NORA will analyze historical data and send RFQs to carriers.
+          Write your freight request in free text — FRIA will analyze historical data and send RFQs to carriers.
         </p>
       </div>
 
@@ -166,7 +166,7 @@ const rfqId = `FRIA-${timestamp}-${suffix}`;
               fontSize: '14px', fontWeight: '600', cursor: message.trim() ? 'pointer' : 'not-allowed',
               transition: 'all var(--transition)', fontFamily: 'var(--font)'
             }}>
-              {status === 'loading' ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Sending...</> : <><Send size={15} /> Send to NORA</>}
+              {status === 'loading' ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Sending...</> : <><Send size={15} /> Send to FRIA</>}
             </button>
           </div>
         </form>
@@ -209,7 +209,7 @@ function SuccessCard({ result, userEmail }) {
       }}>
         <CheckCircle2 size={18} style={{ color: 'var(--success)', flexShrink: 0 }} />
         <div>
-          <p style={{ fontSize: '14px', fontWeight: '600', color: '#15803d' }}>Request sent to NORA</p>
+          <p style={{ fontSize: '14px', fontWeight: '600', color: '#15803d' }}>Request sent to FRIA</p>
           <p style={{ fontSize: '12px', color: '#166534', marginTop: '1px' }}>ID: <code style={{ fontFamily: 'var(--mono)' }}>{result.rfqId}</code></p>
         </div>
       </div>
@@ -219,7 +219,7 @@ function SuccessCard({ result, userEmail }) {
           <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Lane detected:</span>
             <span style={{
-              background: 'rgba(27,42,74,0.07)', color: 'var(--navy)', borderRadius: '100px',
+              background: 'rgba(10,15,31,0.07)', color: 'var(--navy)', borderRadius: '100px',
               padding: '3px 12px', fontSize: '13px', fontWeight: '500'
             }}>{result.lane}</span>
           </div>
@@ -282,7 +282,7 @@ function AnalysisPreview({ data }) {
             </span>
             <span style={{
               fontSize: '11px', padding: '3px 8px', borderRadius: '4px',
-              background: c.source === 'Historical Rate' ? 'rgba(27,42,74,0.08)' : 'rgba(232,69,44,0.08)',
+              background: c.source === 'Historical Rate' ? 'rgba(10,15,31,0.08)' : 'rgba(77,142,255,0.08)',
               color: c.source === 'Historical Rate' ? 'var(--navy)' : 'var(--coral)', fontWeight: '500'
             }}>{c.source === 'Historical Rate' ? 'Rate Card' : 'Quote'}</span>
           </div>
