@@ -18,7 +18,7 @@ export default function HistoryPage({ user }) {
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '32px 24px' }}>
       <div style={{ marginBottom: '28px' }}>
         <h1 style={{ fontSize: '26px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>My Quote History</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>All quote requests you've submitted through NORA</p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>All quote requests you've submitted through FRIA</p>
       </div>
 
       <div style={{ position: 'relative', marginBottom: '20px' }}>
@@ -82,7 +82,7 @@ function RFQCard({ rfq }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
             <code style={{
               fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--navy)',
-              background: 'rgba(27,42,74,0.07)', padding: '2px 8px', borderRadius: '4px'
+              background: 'rgba(10,15,31,0.07)', padding: '2px 8px', borderRadius: '4px'
             }}>{rfq.id}</code>
             {rfq.lane && (
               <span style={{
