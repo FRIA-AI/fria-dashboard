@@ -1,20 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
-
 :root {
-  --navy: #1B2A4A;
-  --navy-light: #243559;
-  --navy-deep: #111d34;
-  --coral: #E8452C;
-  --coral-light: #ff5a3f;
-  --coral-dim: rgba(232, 69, 44, 0.12);
+  --navy: #0A0F1F;
+  --navy-light: #1a2338;
+  --navy-deep: #05070f;
+  --coral: #4D8EFF;
+  --coral-light: #6fa3ff;
+  --coral-dim: rgba(77, 142, 255, 0.12);
   --bg: #f0f2f5;
   --bg-card: #ffffff;
-  --bg-sidebar: #1B2A4A;
-  --text-primary: #1B2A4A;
-  --text-secondary: #6b7a95;
+  --bg-sidebar: #0A0F1F;
+  --text-primary: #0A0F1F;
+  --text-secondary: #5c6b8a;
   --text-muted: #9ba8bf;
-  --border: rgba(27, 42, 74, 0.1);
-  --border-strong: rgba(27, 42, 74, 0.18);
+  --border: rgba(10, 15, 31, 0.1);
+  --border-strong: rgba(10, 15, 31, 0.18);
   --success: #16a34a;
   --success-bg: #f0fdf4;
   --warning: #d97706;
@@ -23,17 +22,15 @@
   --radius-md: 10px;
   --radius-lg: 16px;
   --radius-xl: 22px;
-  --shadow-sm: 0 1px 3px rgba(27,42,74,0.07), 0 1px 2px rgba(27,42,74,0.04);
-  --shadow-md: 0 4px 12px rgba(27,42,74,0.1), 0 2px 4px rgba(27,42,74,0.06);
-  --shadow-lg: 0 12px 32px rgba(27,42,74,0.14), 0 4px 8px rgba(27,42,74,0.08);
+  --shadow-sm: 0 1px 3px rgba(10,15,31,0.07), 0 1px 2px rgba(10,15,31,0.04);
+  --shadow-md: 0 4px 12px rgba(10,15,31,0.1), 0 2px 4px rgba(10,15,31,0.06);
+  --shadow-lg: 0 12px 32px rgba(10,15,31,0.14), 0 4px 8px rgba(10,15,31,0.08);
   --font: 'DM Sans', sans-serif;
   --mono: 'DM Mono', monospace;
   --sidebar-width: 240px;
   --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
 html, body, #root {
   height: 100%;
   font-family: var(--font);
@@ -41,9 +38,7 @@ html, body, #root {
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
 }
-
 input, textarea, button, select { font-family: var(--font); }
-
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
