@@ -4,7 +4,7 @@ import { logout } from '../auth';
 const NAV = [
   { id: 'rfq',     label: 'New Quote',  icon: Send,      adminOnly: false },
   { id: 'history', label: 'My History', icon: Clock,     adminOnly: false },
-  { id: 'chat',    label: 'Chat with NORA', icon: MessageSquare, adminOnly: true  },
+  { id: 'chat',    label: 'Chat with FRIA', icon: MessageSquare, adminOnly: true  },
   { id: 'ratecards', label: 'Rate Cards',     icon: FileUp,        adminOnly: true  },
   { id: 'metrics', label: 'Metrics',      icon: BarChart2,     adminOnly: true  },
 ];
@@ -23,13 +23,15 @@ export default function Sidebar({ user, activeTab, setActiveTab }) {
       flexDirection: 'column', flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.06)'
     }}>
       <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <img src="/logo-white.png" alt="Noatum Logistics" style={{ height: '28px', marginBottom: '16px', display: 'block' }} />
+        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#EAF0FB', letterSpacing: '3px', marginBottom: '16px' }}>
+          FRIA
+        </div>
         <div style={{
-          background: 'rgba(232,69,44,0.1)', border: '1px solid rgba(232,69,44,0.2)',
+          background: 'rgba(77,142,255,0.12)', border: '1px solid rgba(77,142,255,0.25)',
           borderRadius: '6px', padding: '5px 10px',
-          color: 'rgba(255,255,255,0.6)', fontSize: '11px', fontWeight: '500', letterSpacing: '0.04em'
+          color: 'rgba(255,255,255,0.7)', fontSize: '11px', fontWeight: '500', letterSpacing: '0.04em'
         }}>
-          NORA · Rate Analyzer
+          FRIA · Rate Intelligence Agent
         </div>
       </div>
 
@@ -41,8 +43,8 @@ export default function Sidebar({ user, activeTab, setActiveTab }) {
             <button key={item.id} onClick={() => setActiveTab(item.id)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
               padding: '10px 12px', borderRadius: 'var(--radius-md)', border: 'none',
-              background: active ? 'rgba(232,69,44,0.12)' : 'transparent',
-              color: active ? '#E8452C' : 'rgba(255,255,255,0.45)',
+              background: active ? 'rgba(77,142,255,0.14)' : 'transparent',
+              color: active ? '#4D8EFF' : 'rgba(255,255,255,0.45)',
               fontSize: '13px', fontWeight: active ? '600' : '400',
               cursor: 'pointer', transition: 'all var(--transition)', textAlign: 'left',
               marginBottom: '2px', fontFamily: 'var(--font)'
@@ -61,7 +63,7 @@ export default function Sidebar({ user, activeTab, setActiveTab }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', marginBottom: '8px' }}>
           <div style={{
             width: '34px', height: '34px', borderRadius: '50%',
-            background: '#E8452C', display: 'flex', alignItems: 'center',
+            background: '#4D8EFF', display: 'flex', alignItems: 'center',
             justifyContent: 'center', color: 'white', fontSize: '12px', fontWeight: '600', flexShrink: 0
           }}>{user.initials}</div>
           <div style={{ overflow: 'hidden' }}>
