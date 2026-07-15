@@ -1,4 +1,4 @@
-import { LogOut, Send, BarChart2, Clock, MessageSquare, FileUp } from 'lucide-react';
+import { LogOut, Send, BarChart2, Clock, MessageSquare, FileUp, Truck } from 'lucide-react';
 import { logout } from '../auth';
 
 const NAV = [
@@ -6,6 +6,7 @@ const NAV = [
   { id: 'history', label: 'My History', icon: Clock,     adminOnly: false },
   { id: 'chat',    label: 'Chat with FRIA', icon: MessageSquare, adminOnly: true  },
   { id: 'ratecards', label: 'Rate Cards',     icon: FileUp,        adminOnly: true  },
+  { id: 'carriers', label: 'Carriers', icon: Truck, adminOnly: true },
   { id: 'metrics', label: 'Metrics',      icon: BarChart2,     adminOnly: true  },
 ];
 
