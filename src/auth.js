@@ -1,8 +1,9 @@
 // TEMPORAL — este archivo de auth mock se reemplaza por Supabase Auth
-// (ver Sección 11.5 del business case). No agregar más usuarios aquí.
+// (ver Seccion 11.5 del business case). No agregar mas usuarios aqui.
 
 export const USERS = [
   { id: 'karlaperdomo', name: 'Karla Perdomo', email: 'pdkarla@hotmail.com', password: 'KPerdomo', initials: 'KP', role: 'commercial' },
+  { id: 'adolfopiloto', name: 'Adolfo Romero', email: 'adolforperez@gmail.com', password: 'FriaPiloto26', initials: 'AR', role: 'admin' },
 ];
 
 export function login(email, password) {
