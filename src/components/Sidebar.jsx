@@ -1,5 +1,5 @@
 import { LogOut, Send, BarChart2, Clock, MessageSquare, FileUp, Truck } from 'lucide-react';
-import { logout } from '../auth';
+import { supabase } from '../supabaseClient';
 
 const NAV = [
   { id: 'rfq',     label: 'New Quote',  icon: Send,      adminOnly: false },
@@ -11,9 +11,8 @@ const NAV = [
 ];
 
 export default function Sidebar({ user, activeTab, setActiveTab }) {
-  function handleLogout() {
-    logout();
-    window.location.reload();
+  async function handleLogout() {
+    await supabase.auth.signOut();
   }
 
   const visibleNav = NAV.filter(item => !item.adminOnly || user.role === 'admin');
@@ -69,8 +68,8 @@ export default function Sidebar({ user, activeTab, setActiveTab }) {
           }}>{user.initials}</div>
           <div style={{ overflow: 'hidden' }}>
             <div style={{ color: 'white', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
-            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px' }}>
-              {user.role === 'admin' ? 'Manager' : 'Commercial'}
+            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', textTransform: 'capitalize' }}>
+              {user.role}
             </div>
           </div>
         </div>
