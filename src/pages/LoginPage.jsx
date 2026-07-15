@@ -1,25 +1,27 @@
 import { useState } from 'react';
-import { login } from '../auth';
+import { supabase } from '../supabaseClient';
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
-    setTimeout(() => {
-      const user = login(email.trim().toLowerCase(), password);
-      if (user) {
-        onLogin(user);
-      } else {
-        setError('Incorrect email or password');
-        setLoading(false);
-      }
-    }, 400);
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    setLoading(false);
+    if (signInError) {
+      setError('Incorrect email or password');
+      return;
+    }
+    // No hace falta hacer nada mas aqui: App.jsx escucha el cambio de sesion
+    // via supabase.auth.onAuthStateChange y actualiza la pantalla solo.
   }
 
   return (
