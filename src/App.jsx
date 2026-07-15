@@ -7,24 +7,20 @@ import HistoryPage from './pages/HistoryPage';
 import MetricsPage from './pages/MetricsPage';
 import ChatPage from './pages/ChatPage';
 import RateCardsPage from './pages/RateCardsPage';
-
+import CarriersPage from './pages/CarriersPage';
 export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('rfq');
   const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
     const session = getSession();
     if (session) setUser(session);
     setMounted(true);
   }, []);
-
   if (!mounted) return null;
-
   if (!user) {
     return <LoginPage onLogin={u => { setUser(u); setActiveTab('rfq'); }} />;
   }
-
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar user={user} activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -34,6 +30,7 @@ export default function App() {
         {activeTab === 'metrics'   && <MetricsPage user={user} />}
         {activeTab === 'chat'      && <ChatPage user={user} />}
         {activeTab === 'ratecards' && <RateCardsPage user={user} />}
+        {activeTab === 'carriers'  && <CarriersPage user={user} />}
       </main>
     </div>
   );
