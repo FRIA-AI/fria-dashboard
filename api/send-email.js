@@ -39,7 +39,11 @@ export default async function handler(req, res) {
       .single();
 
     if (configError || !config) {
-      return res.status(404).json({ error: `No active email config found for tenant ${tenantId}` });
+      console.error('tenant_email_configs query error:', JSON.stringify(configError));
+      return res.status(404).json({
+        error: `No active email config found for tenant ${tenantId}`,
+        debug: configError ? configError.message : 'no error object, but no row returned',
+      });
     }
 
     const transporter = nodemailer.createTransport({
