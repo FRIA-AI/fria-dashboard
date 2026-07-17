@@ -43,4 +43,3 @@ export default async function handler(req, res) {
   res.writeHead(302, { Location: `${GOOGLE_AUTH_URL}?${params.toString()}` });
   res.end();
 }
-Agregar endpoint de inicio de OAuth con Google
