@@ -88,4 +88,3 @@ export default async function handler(req, res) {
     res.end();
   }
 }
-Agregar callback de OAuth con Google
