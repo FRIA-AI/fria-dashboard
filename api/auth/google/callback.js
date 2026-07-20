@@ -61,6 +61,24 @@ export default async function handler(req, res) {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
     const profile = await profileResp.json();
+    // ... después de: const profile = await profileResp.json();
+
+const { error: dbError } = await supabase
+  .from('tenant_email_oauth')
+  .upsert({
+    tenant_id: tenantId,
+    provider: 'google',
+    email_address: profile.emailAddress,
+    scopes: tokens.scope,
+    refresh_token: tokens.refresh_token,
+    access_token: tokens.access_token,
+    access_token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    last_history_id: profile.historyId,   // <-- NUEVO: cursor inicial para el endpoint de lectura
+    status: 'active',
+    last_error: null,
+    connected_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'tenant_id,provider' });
 
     const { error: dbError } = await supabase
       .from('tenant_email_oauth')
