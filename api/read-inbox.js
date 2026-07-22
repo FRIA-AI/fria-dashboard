@@ -9,6 +9,12 @@ const supabaseAdmin = createClient(
 // solo procesamos correos cuyo asunto trae un RFQ ID real de FRIA.
 const RFQ_SUBJECT_PATTERN = /FRIA-\d+-[A-Z0-9]{2,6}/;
 
+// Identidad fija que FRIA usa solo para sus propias notificaciones internas
+// (preguntas de carrier, analisis de tarifas, escalaciones) -- nunca se usa
+// para mandar RFQs a carriers, asi que cualquier correo que venga de aqui
+// es ruido interno, no una respuesta real.
+const FRIA_INTERNAL_SENDER = 'adolfo.romero@friaai.com';
+
 async function refreshAccessToken(oauth) {
   const resp = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -132,8 +138,8 @@ async function processTenantInbox(oauth) {
     const msg = await fetchMessage(accessToken, messageId);
     if (!msg || !msg.payload) continue;
 
-    // Ignorar lo que la propia cuenta mando (RFQs salientes, notificaciones internas) --
-    // solo nos interesan las respuestas que SI llegaron de afuera. Gmail etiqueta
+    // Ignorar lo que la propia cuenta mando (RFQs salientes) -- solo nos
+    // interesan las respuestas que SI llegaron de afuera. Gmail etiqueta
     // automaticamente cualquier correo enviado desde esta cuenta con "SENT".
     if (msg.labelIds && msg.labelIds.includes('SENT')) continue;
 
@@ -142,6 +148,12 @@ async function processTenantInbox(oauth) {
 
     const fromRaw = getHeader(msg.payload.headers, 'From');
     const { address, name } = parseFromHeader(fromRaw);
+
+    // Ignorar las notificaciones internas que FRIA misma genera (preguntas,
+    // analisis de tarifas, escalaciones) -- se mandan desde esta identidad
+    // fija y pueden llegar a la misma bandeja que se esta monitoreando.
+    if (address === FRIA_INTERNAL_SENDER) continue;
+
     const text = extractPlainText(msg.payload);
 
     results.push({
