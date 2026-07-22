@@ -9,11 +9,16 @@ const supabaseAdmin = createClient(
 // solo procesamos correos cuyo asunto trae un RFQ ID real de FRIA.
 const RFQ_SUBJECT_PATTERN = /FRIA-\d+-[A-Z0-9]{2,6}/;
 
-// Identidad fija que FRIA usa solo para sus propias notificaciones internas
-// (preguntas de carrier, analisis de tarifas, escalaciones) -- nunca se usa
-// para mandar RFQs a carriers, asi que cualquier correo que venga de aqui
-// es ruido interno, no una respuesta real.
-const FRIA_INTERNAL_SENDER = 'adolfo.romero@friaai.com';
+// Prefijos fijos que usan las notificaciones que FRIA misma genera (preguntas,
+// analisis de tarifas, escalaciones) -- ningun carrier real va a escribir un
+// asunto que empiece asi por su cuenta, asi que es mas confiable que filtrar
+// por remitente (que en pruebas puede coincidir con quien esta simulando ser
+// el carrier).
+const FRIA_NOTIFICATION_SUBJECT_PREFIXES = [
+  'FRIA — Pregunta de carrier',
+  'FRIA — Rate Analysis Updated',
+  'FRIA — Revisión manual requerida',
+];
 
 async function refreshAccessToken(oauth) {
   const resp = await fetch('https://oauth2.googleapis.com/token', {
@@ -100,8 +105,6 @@ async function processTenantInbox(oauth) {
     return results;
   }
 
-  // Auto-inicializacion: si no hay cursor guardado, toma el historyId actual
-  // y no procesa nada esta corrida -- a partir de la siguiente ya tiene desde donde comparar.
   if (!oauth.last_history_id) {
     const currentId = await getCurrentHistoryId(accessToken);
     await supabaseAdmin.from('tenant_email_oauth')
@@ -118,7 +121,6 @@ async function processTenantInbox(oauth) {
   const historyData = await historyResp.json();
 
   if (!historyResp.ok) {
-    // Cursor obsoleto -- reiniciar desde el historyId actual en vez de tronar.
     const currentId = await getCurrentHistoryId(accessToken);
     await supabaseAdmin.from('tenant_email_oauth')
       .update({ last_history_id: currentId, updated_at: new Date().toISOString() })
@@ -139,21 +141,18 @@ async function processTenantInbox(oauth) {
     if (!msg || !msg.payload) continue;
 
     // Ignorar lo que la propia cuenta mando (RFQs salientes) -- solo nos
-    // interesan las respuestas que SI llegaron de afuera. Gmail etiqueta
-    // automaticamente cualquier correo enviado desde esta cuenta con "SENT".
+    // interesan las respuestas que SI llegaron de afuera.
     if (msg.labelIds && msg.labelIds.includes('SENT')) continue;
 
     const subject = getHeader(msg.payload.headers, 'Subject');
     if (!RFQ_SUBJECT_PATTERN.test(subject)) continue; // no es respuesta a un RFQ de FRIA
 
+    // Ignorar las notificaciones que FRIA misma genera -- se identifican por
+    // su propio patron de asunto, no por quien las mando.
+    if (FRIA_NOTIFICATION_SUBJECT_PREFIXES.some((prefix) => subject.startsWith(prefix))) continue;
+
     const fromRaw = getHeader(msg.payload.headers, 'From');
     const { address, name } = parseFromHeader(fromRaw);
-
-    // Ignorar las notificaciones internas que FRIA misma genera (preguntas,
-    // analisis de tarifas, escalaciones) -- se mandan desde esta identidad
-    // fija y pueden llegar a la misma bandeja que se esta monitoreando.
-    if (address === FRIA_INTERNAL_SENDER) continue;
-
     const text = extractPlainText(msg.payload);
 
     results.push({
