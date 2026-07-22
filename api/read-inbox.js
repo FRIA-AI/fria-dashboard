@@ -94,9 +94,8 @@ async function processTenantInbox(oauth) {
     return results;
   }
 
-  // Auto-inicializacion: si no hay cursor guardado (conexiones creadas antes de
-  // este cambio, como la piloto), toma el historyId actual y no procesa nada esta
-  // corrida -- a partir de la siguiente ya tiene desde donde comparar.
+  // Auto-inicializacion: si no hay cursor guardado, toma el historyId actual
+  // y no procesa nada esta corrida -- a partir de la siguiente ya tiene desde donde comparar.
   if (!oauth.last_history_id) {
     const currentId = await getCurrentHistoryId(accessToken);
     await supabaseAdmin.from('tenant_email_oauth')
@@ -113,8 +112,7 @@ async function processTenantInbox(oauth) {
   const historyData = await historyResp.json();
 
   if (!historyResp.ok) {
-    // Cursor obsoleto (gap muy largo sin correr, Gmail purga historial viejo) --
-    // reiniciar desde el historyId actual en vez de tronar.
+    // Cursor obsoleto -- reiniciar desde el historyId actual en vez de tronar.
     const currentId = await getCurrentHistoryId(accessToken);
     await supabaseAdmin.from('tenant_email_oauth')
       .update({ last_history_id: currentId, updated_at: new Date().toISOString() })
@@ -133,6 +131,11 @@ async function processTenantInbox(oauth) {
   for (const messageId of messageIds) {
     const msg = await fetchMessage(accessToken, messageId);
     if (!msg || !msg.payload) continue;
+
+    // Ignorar lo que la propia cuenta mando (RFQs salientes, notificaciones internas) --
+    // solo nos interesan las respuestas que SI llegaron de afuera. Gmail etiqueta
+    // automaticamente cualquier correo enviado desde esta cuenta con "SENT".
+    if (msg.labelIds && msg.labelIds.includes('SENT')) continue;
 
     const subject = getHeader(msg.payload.headers, 'Subject');
     if (!RFQ_SUBJECT_PATTERN.test(subject)) continue; // no es respuesta a un RFQ de FRIA
@@ -184,7 +187,6 @@ export default async function handler(req, res) {
       allResults.push(...items);
     } catch (e) {
       console.error(`read-inbox error for tenant ${oauth.tenant_id}:`, e);
-      // sigue con los demas tenants aunque uno falle
     }
   }
 
