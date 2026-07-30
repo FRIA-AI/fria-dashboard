@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import LoginPage from './pages/LoginPage';
 import SetPasswordPage from './pages/SetPasswordPage';
-import Sidebar from './components/Sidebar';
+import TopNav from './components/TopNav';
+import HomePage from './pages/HomePage';
 import RFQPage from './pages/RFQPage';
 import HistoryPage from './pages/HistoryPage';
 import MetricsPage from './pages/MetricsPage';
 import ChatPage from './pages/ChatPage';
 import RateCardsPage from './pages/RateCardsPage';
 import CarriersPage from './pages/CarriersPage';
+import SettingsPage from './pages/SettingsPage';
 
 function initials(firstName, lastName) {
   const a = (firstName || '').trim()[0] || '';
@@ -18,7 +20,7 @@ function initials(firstName, lastName) {
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('rfq');
+  const [activeTab, setActiveTab] = useState('home');
   const [mounted, setMounted] = useState(false);
 
   const isAuthCallback = window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery');
@@ -36,7 +38,6 @@ export default function App() {
       .single();
 
     if (error || !profile) {
-      // Sesion valida en Supabase pero sin fila de perfil ligada todavia.
       setUser({
         id: session.user.id,
         name: session.user.email,
@@ -77,15 +78,17 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <Sidebar user={user} activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main style={{ flex: 1, overflowY: activeTab === 'chat' ? 'hidden' : 'auto', background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      <TopNav user={user} activeTab={activeTab} setActiveTab={setActiveTab} />
+      <main style={{ flex: 1, overflowY: activeTab === 'chat' ? 'hidden' : 'auto', background: 'var(--bg-page)' }}>
+        {activeTab === 'home'      && <HomePage user={user} setActiveTab={setActiveTab} />}
         {activeTab === 'rfq'       && <RFQPage user={user} />}
         {activeTab === 'history'   && <HistoryPage user={user} />}
         {activeTab === 'metrics'   && <MetricsPage user={user} />}
         {activeTab === 'chat'      && <ChatPage user={user} />}
         {activeTab === 'ratecards' && <RateCardsPage user={user} />}
         {activeTab === 'carriers'  && <CarriersPage user={user} />}
+        {activeTab === 'settings'  && <SettingsPage user={user} />}
       </main>
     </div>
   );
