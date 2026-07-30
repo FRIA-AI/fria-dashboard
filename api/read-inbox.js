@@ -9,15 +9,18 @@ const supabaseAdmin = createClient(
 // solo procesamos correos cuyo asunto trae un RFQ ID real de FRIA.
 const RFQ_SUBJECT_PATTERN = /FRIA-\d+-[A-Z0-9]{2,6}/;
 
-// Prefijos fijos que usan las notificaciones que FRIA misma genera (preguntas,
-// analisis de tarifas, escalaciones) -- ningun carrier real va a escribir un
-// asunto que empiece asi por su cuenta, asi que es mas confiable que filtrar
-// por remitente (que en pruebas puede coincidir con quien esta simulando ser
-// el carrier).
+// Prefijos fijos que usan las notificaciones que FRIA misma genera -- ningun
+// carrier real va a escribir un asunto que empiece asi por su cuenta, asi
+// que es mas confiable que filtrar por remitente (que en pruebas puede
+// coincidir con quien esta simulando ser el carrier).
 const FRIA_NOTIFICATION_SUBJECT_PREFIXES = [
   'FRIA — Pregunta de carrier',
   'FRIA — Rate Analysis Updated',
   'FRIA — Revisión manual requerida',
+  'FRIA — Respuesta de carrier requiere su revisión',
+  'FRIA — Respuesta requiere confirmación',
+  'FRIA — Pregunta respondida automáticamente',
+  'FRIA — Contacto de respaldo agregado',
 ];
 
 async function refreshAccessToken(oauth) {
