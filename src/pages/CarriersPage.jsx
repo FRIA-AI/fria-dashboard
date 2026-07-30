@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Upload, FileText, X, CheckCircle2, AlertCircle, Loader2, Download } from 'lucide-react';
 
-const CARRIER_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook-test/carrier-ingestion';
+const CARRIER_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/carrier-ingestion';
 
 export default function CarriersPage({ user }) {
   const [file, setFile] = useState(null);
