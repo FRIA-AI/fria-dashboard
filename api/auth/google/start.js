@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { resolveTenantFromToken } from '../../../lib/resolveTenant.js';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const SCOPES = [
@@ -17,10 +18,15 @@ function signState(payload) {
 }
 
 export default async function handler(req, res) {
-  const { tenantId } = req.query;
+  // Antes esto confiaba en un tenantId mandado directo por el cliente --
+  // cualquiera podia enganchar una cuenta de Gmail a un tenant ajeno con
+  // solo cambiar un parametro en la URL. Ahora se resuelve el tenant real
+  // a partir de la sesion verificada de Supabase Auth.
+  const { accessToken } = req.query;
 
+  const tenantId = await resolveTenantFromToken(accessToken);
   if (!tenantId) {
-    return res.status(400).json({ error: 'Falta tenantId' });
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const state = signState({
