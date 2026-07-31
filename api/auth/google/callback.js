@@ -28,7 +28,7 @@ export default async function handler(req, res) {
   const dashboardBase = process.env.FRIA_DASHBOARD_URL || 'https://fria-dashboard.vercel.app';
 
   if (googleError) {
-    res.writeHead(302, { Location: `${dashboardBase}/settings/email?connected=cancelled` });
+    res.writeHead(302, { Location: `${dashboardBase}/?connected=cancelled` });
     return res.end();
   }
 
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
   try {
     ({ tenantId } = verifyState(state));
   } catch (e) {
-    res.writeHead(302, { Location: `${dashboardBase}/settings/email?connected=error&reason=state` });
+    res.writeHead(302, { Location: `${dashboardBase}/?connected=error&reason=state` });
     return res.end();
   }
 
@@ -81,11 +81,11 @@ export default async function handler(req, res) {
 
     if (dbError) throw dbError;
 
-    res.writeHead(302, { Location: `${dashboardBase}/settings/email?connected=success` });
+    res.writeHead(302, { Location: `${dashboardBase}/?connected=success` });
     res.end();
   } catch (e) {
     console.error('OAuth callback error:', e);
-    res.writeHead(302, { Location: `${dashboardBase}/settings/email?connected=error` });
+    res.writeHead(302, { Location: `${dashboardBase}/?connected=error` });
     res.end();
   }
 }
