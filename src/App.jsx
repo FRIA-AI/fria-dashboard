@@ -18,9 +18,14 @@ function initials(firstName, lastName) {
   return (a + b).toUpperCase() || '?';
 }
 
+function getInitialTab() {
+  const params = new URLSearchParams(window.location.search);
+  return params.has('connected') ? 'settings' : 'home';
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState(getInitialTab);
   const [mounted, setMounted] = useState(false);
 
   const isAuthCallback = window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery');
