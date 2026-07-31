@@ -1,4 +1,4 @@
-import { supabaseAdmin, resolveTenantFromToken } from '../../lib/resolveTenant.js';
+import { supabaseAdmin, resolveTenantFromToken } from '../../../lib/resolveTenant.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
