@@ -11,6 +11,7 @@ import ChatPage from './pages/ChatPage';
 import RateCardsPage from './pages/RateCardsPage';
 import CarriersPage from './pages/CarriersPage';
 import SettingsPage from './pages/SettingsPage';
+import SellQuotePage from './pages/SellQuotePage';
 
 function initials(firstName, lastName) {
   const a = (firstName || '').trim()[0] || '';
@@ -27,6 +28,12 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState(getInitialTab);
   const [mounted, setMounted] = useState(false);
+  const [sellContext, setSellContext] = useState(null);
+
+  function goToSellQuote(context) {
+    setSellContext(context);
+    setActiveTab('sell-quote');
+  }
 
   const isAuthCallback = window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery');
 
@@ -89,13 +96,14 @@ export default function App() {
       <TopNav user={user} activeTab={activeTab} setActiveTab={setActiveTab} />
       <main style={{ flex: 1, overflowY: activeTab === 'chat' ? 'hidden' : 'auto', background: 'var(--bg-page)' }}>
         {activeTab === 'home'      && <HomePage user={user} setActiveTab={setActiveTab} />}
-        {activeTab === 'rfq'       && <RFQPage user={user} />}
-        {activeTab === 'history'   && <HistoryPage user={user} />}
+        {activeTab === 'rfq'       && <RFQPage user={user} onSellQuote={goToSellQuote} />}
+        {activeTab === 'history'   && <HistoryPage user={user} onSellQuote={goToSellQuote} />}
         {activeTab === 'metrics'   && <MetricsPage user={user} />}
         {activeTab === 'chat'      && <ChatPage user={user} />}
         {activeTab === 'ratecards' && <RateCardsPage user={user} />}
         {activeTab === 'carriers'  && <CarriersPage user={user} />}
         {activeTab === 'settings'  && <SettingsPage user={user} />}
+        {activeTab === 'sell-quote' && <SellQuotePage user={user} context={sellContext} setActiveTab={setActiveTab} />}
       </main>
     </div>
   );
