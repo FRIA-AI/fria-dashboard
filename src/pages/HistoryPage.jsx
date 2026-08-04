@@ -48,7 +48,7 @@ const HistorialRow = ({ header, cols }) => (
 
 const DetalleRow = ({ header, cols }) => (
   <div style={{
-    display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 1.4fr',
+    display: 'grid', gridTemplateColumns: '1.1fr 0.9fr 0.8fr 1.3fr 1.1fr',
     padding: header ? '12px 22px' : '14px 22px',
     background: '#FFFFFF',
     borderTop: header ? 'none' : '1px solid var(--border-card)',
@@ -63,7 +63,7 @@ const DetalleRow = ({ header, cols }) => (
   </div>
 );
 
-const DetalleRFQ = ({ quote, onBack }) => {
+const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
   const [carriers, setCarriers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -71,7 +71,7 @@ const DetalleRFQ = ({ quote, onBack }) => {
     async function load() {
       const { data, error } = await supabase
         .from('quote_rfqs')
-        .select('status, quoted_rate, valid_until, carrier_notes, carriers(name)')
+        .select('status, quoted_rate, valid_until, transit_days, carrier_notes, carriers(name)')
         .eq('quote_id', quote.id);
       if (!error && data) setCarriers(data);
       setLoading(false);
@@ -97,7 +97,7 @@ const DetalleRFQ = ({ quote, onBack }) => {
         <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
       ) : (
         <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
-          <DetalleRow header cols={['Carrier', 'Estado', 'Tarifa', 'Detalle']} />
+          <DetalleRow header cols={['Carrier', 'Estado', 'Tarifa', 'Detalle', '']} />
           {carriers.map((c, i) => {
             const st = RFQ_STATUS_MAP[c.status] || RFQ_STATUS_MAP.sent;
             let detail = '—';
@@ -117,6 +117,28 @@ const DetalleRFQ = ({ quote, onBack }) => {
                   {c.quoted_rate ? `$${Number(c.quoted_rate).toLocaleString()}` : '—'}
                 </span>,
                 <span key="detail" style={{ color: 'var(--text-secondary)' }}>{detail}</span>,
+                <span key="action">
+                  {c.status === 'responded' && c.quoted_rate && onSellQuote && (
+                    <button onClick={() => onSellQuote({
+                      quoteNumber: quote.quote_number,
+                      origin: quote.origin_city,
+                      destination: quote.destination_city,
+                      equipment: quote.equipment_type,
+                      carrierName: c.carriers?.name || 'Carrier',
+                      baseRate: Number(c.quoted_rate),
+                      currency: 'MXN',
+                      validUntil: c.valid_until,
+                      transitDays: c.transit_days,
+                      quoteId: quote.id,
+                    })} style={{
+                      height: '30px', padding: '0 12px', borderRadius: 'var(--radius-sm)',
+                      background: 'var(--accent-primary)', color: '#FFFFFF', border: 'none',
+                      fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)',
+                    }}>
+                      Armar venta
+                    </button>
+                  )}
+                </span>,
               ]} />
             );
           })}
@@ -126,7 +148,7 @@ const DetalleRFQ = ({ quote, onBack }) => {
   );
 };
 
-export default function HistoryPage({ user }) {
+export default function HistoryPage({ user, onSellQuote }) {
   const [search, setSearch] = useState('');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -138,7 +160,7 @@ export default function HistoryPage({ user }) {
 
       const { data: quotesData, error: quotesError } = await supabase
         .from('quotes')
-        .select('id, quote_number, origin_city, destination_city, status, created_at')
+        .select('id, quote_number, origin_city, destination_city, equipment_type, status, created_at')
         .eq('requested_by', user.tenantUserId)
         .order('created_at', { ascending: false });
 
@@ -177,7 +199,7 @@ export default function HistoryPage({ user }) {
   });
 
   if (selected) {
-    return <DetalleRFQ quote={selected} onBack={() => setSelected(null)} />;
+    return <DetalleRFQ quote={selected} onBack={() => setSelected(null)} onSellQuote={onSellQuote} />;
   }
 
   return (
