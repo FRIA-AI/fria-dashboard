@@ -21,7 +21,7 @@ function extractLane(text) {
   return null;
 }
 
-export default function RFQPage({ user }) {
+export default function RFQPage({ user, onSellQuote }) {
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState('idle'); // idle | loading | success | error
   const [result, setResult] = useState(null);
@@ -79,7 +79,7 @@ export default function RFQPage({ user }) {
   }
 
   if (status === 'success' && result) {
-    return <ComparativaView result={result} userEmail={user.email} onNewQuote={() => { setStatus('idle'); setResult(null); }} />;
+    return <ComparativaView result={result} userEmail={user.email} onNewQuote={() => { setStatus('idle'); setResult(null); }} onSellQuote={onSellQuote} />;
   }
 
   return (
@@ -151,7 +151,7 @@ function timeAgo(iso) {
   return `hace ${hrs} h`;
 }
 
-function ComparativaView({ result, userEmail, onNewQuote }) {
+function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
   const carriers = result.data?.carriers || result.data?.analysis?.carriers || [];
   const sorted = [...carriers].sort((a, b) => a.price - b.price);
 
@@ -218,6 +218,23 @@ function ComparativaView({ result, userEmail, onNewQuote }) {
         <button
           disabled={!sorted.length}
           title={sorted.length ? '' : 'Disponible cuando haya al menos una cotización'}
+          onClick={() => {
+            if (!sorted.length || !onSellQuote) return;
+            const winner = sorted[0];
+            const [origin, destination] = (result.lane || ' → ').split(' → ');
+            onSellQuote({
+              quoteNumber: result.rfqId,
+              origin: origin || '—',
+              destination: destination || '—',
+              equipment: null,
+              carrierName: winner.name,
+              baseRate: winner.price || 0,
+              currency: winner.currency || 'MXN',
+              validUntil: null,
+              transitDays: null,
+              quoteId: null,
+            });
+          }}
           style={{
             height: '46px', padding: '0 26px', borderRadius: 'var(--radius-md)',
             background: sorted.length ? 'var(--accent-primary)' : 'var(--border-input)',
