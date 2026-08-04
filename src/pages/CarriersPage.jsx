@@ -1,31 +1,68 @@
-import { useState } from 'react';
-import { Upload, FileText, X, CheckCircle2, AlertCircle, Loader2, Download } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 
 const CARRIER_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook-test/carrier-ingestion';
+
+const GEO_LABELS = {
+  domestic_mx: 'Doméstico MX',
+  cross_border: 'Cross-border',
+  domestic_usa: 'Doméstico USA',
+};
+
+function formatEquipment(arr) {
+  if (!arr || !arr.length) return '—';
+  return arr.map(e => e.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(' / ');
+}
+
+function formatGeo(arr) {
+  if (!arr || !arr.length) return '—';
+  return arr.map(g => GEO_LABELS[g] || g).join(' / ');
+}
+
+const CRow = ({ header, cols }) => (
+  <div style={{
+    display: 'grid', gridTemplateColumns: '1.3fr 1.3fr 1.2fr 1.5fr',
+    padding: header ? '12px 22px' : '16px 22px',
+    background: '#FFFFFF',
+    borderTop: header ? 'none' : '1px solid var(--border-card)',
+    fontSize: header ? '11px' : '13px',
+    fontWeight: header ? 600 : 400,
+    color: header ? 'var(--text-secondary)' : 'var(--text-primary)',
+    textTransform: header ? 'uppercase' : 'none',
+    letterSpacing: header ? '.04em' : 'normal',
+    alignItems: 'center',
+  }}>
+    {cols.map((c, i) => <div key={i}>{c}</div>)}
+  </div>
+);
 
 export default function CarriersPage({ user }) {
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
-  const [status, setStatus] = useState('idle'); // idle | loading | success | error
+  const [status, setStatus] = useState('idle');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
-  function handleDrop(e) {
-    e.preventDefault();
-    setDragging(false);
-    const f = e.dataTransfer.files[0];
-    if (f) validateAndSetFile(f);
+  const [carriers, setCarriers] = useState([]);
+  const [loadingList, setLoadingList] = useState(true);
+
+  async function loadCarriers() {
+    setLoadingList(true);
+    const { data, error } = await supabase
+      .from('carriers')
+      .select('id, name, geographies, equipment_types, email')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+    if (!error && data) setCarriers(data);
+    setLoadingList(false);
   }
 
-  function handleFileInput(e) {
-    const f = e.target.files[0];
-    if (f) validateAndSetFile(f);
-  }
+  useEffect(() => { loadCarriers(); }, []);
 
   function validateAndSetFile(f) {
     const ext = f.name.split('.').pop().toLowerCase();
     if (ext !== 'xlsx') {
-      setError('Only Excel (.xlsx) files are supported. Download the template below.');
+      setError('Solo se aceptan archivos Excel (.xlsx). Descarga la plantilla de arriba.');
       return;
     }
     setError('');
@@ -43,147 +80,127 @@ export default function CarriersPage({ user }) {
       formData.append('data', file);
       formData.append('uploaderEmail', user.email);
 
-      const res = await fetch(CARRIER_WEBHOOK_URL, {
-        method: 'POST',
-        body: formData,
-      });
-
+      const res = await fetch(CARRIER_WEBHOOK_URL, { method: 'POST', body: formData });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const data = await res.json();
       setResult(data);
       setStatus('success');
       setFile(null);
+      loadCarriers();
     } catch (e) {
-      setError('Could not connect to FRIA. Please try again.');
+      setError('No se pudo conectar con FRIA. Intenta de nuevo.');
       setStatus('error');
     }
   }
 
   return (
-    <div style={{ maxWidth: '720px', margin: '0 auto', padding: '32px 24px' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '26px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>Carrier Database</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-          Upload your approved carrier list. Re-uploading updates existing carriers by name instead of duplicating them.
-        </p>
-      </div>
+    <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
+      <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Carriers</div>
 
-      <a
-        href="/carrier-template.xlsx"
-        download
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: '8px',
-          fontSize: '13px', color: 'var(--coral)', textDecoration: 'none',
-          marginBottom: '24px', fontWeight: '500'
-        }}
-      >
-        <Download size={14} /> Download carrier template (.xlsx)
-      </a>
-
-      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', overflow: 'hidden' }}>
-        <div style={{ padding: '24px' }}>
-          {!file ? (
-            <div
-              onDrop={handleDrop}
-              onDragOver={e => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onClick={() => document.getElementById('carrier-file-input').click()}
-              style={{
-                border: `2px dashed ${dragging ? 'var(--coral)' : 'var(--border)'}`,
-                borderRadius: 'var(--radius-lg)', padding: '48px 24px',
-                textAlign: 'center', cursor: 'pointer',
-                background: dragging ? 'rgba(77,142,255,0.04)' : 'var(--bg)',
-                transition: 'all var(--transition)'
-              }}
-            >
-              <Upload size={28} style={{ color: dragging ? 'var(--coral)' : 'var(--text-muted)', margin: '0 auto 12px' }} />
-              <p style={{ fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                Drop your carrier list here or click to browse
-              </p>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Excel (.xlsx) only — use the template above</p>
-              <input id="carrier-file-input" type="file" accept=".xlsx" onChange={handleFileInput} style={{ display: 'none' }} />
-            </div>
-          ) : (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '12px',
-              background: 'var(--bg)', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)', padding: '14px 16px'
-            }}>
-              <FileText size={20} style={{ color: 'var(--coral)', flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.name}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{(file.size / 1024).toFixed(1)} KB</p>
-              </div>
-              <button onClick={() => setFile(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
-                <X size={16} />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <div style={{ margin: '0 24px 16px', display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 14px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 'var(--radius-md)' }}>
-            <AlertCircle size={14} style={{ color: '#dc2626', flexShrink: 0, marginTop: '1px' }} />
-            <p style={{ fontSize: '13px', color: '#991b1b' }}>{error}</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '20px' }}>
+        <div style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
+          padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px',
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>FRIA Carrier Template</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            Formato estándar para cargar carriers, servicio y contactos.
           </div>
-        )}
+          <a href="/carrier-template.xlsx" download style={{
+            alignSelf: 'flex-start', height: '38px', padding: '0 18px', borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-input)', color: 'var(--text-primary)', textDecoration: 'none',
+            display: 'flex', alignItems: 'center', fontSize: '13px', fontWeight: 600,
+          }}>
+            Descargar plantilla
+          </a>
+        </div>
 
-        <div style={{ padding: '16px 24px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Uploading as <strong style={{ color: 'var(--text-secondary)' }}>{user.name}</strong>
-          </p>
-          <button
-            onClick={handleSubmit}
-            disabled={!file || status === 'loading'}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              background: file ? 'var(--coral)' : 'var(--border)',
-              color: file ? 'white' : 'var(--text-muted)',
-              border: 'none', borderRadius: 'var(--radius-md)', padding: '11px 22px',
-              fontSize: '14px', fontWeight: '600', cursor: file ? 'pointer' : 'not-allowed',
-              transition: 'all var(--transition)', fontFamily: 'var(--font)'
-            }}
-          >
-            {status === 'loading'
-              ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Processing...</>
-              : <><Upload size={15} /> Upload Carriers</>
-            }
-          </button>
+        <div
+          onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) validateAndSetFile(f); }}
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onClick={() => document.getElementById('carrier-file-input').click()}
+          style={{
+            border: `2px dashed ${dragging ? 'var(--accent-primary)' : 'rgba(46,91,168,.35)'}`,
+            borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '24px',
+            background: 'var(--bg-panel)', cursor: 'pointer',
+          }}
+        >
+          {file ? (
+            <>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{file.name}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{(file.size / 1024).toFixed(1)} KB</div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={e => { e.stopPropagation(); handleSubmit(); }} disabled={status === 'loading'} style={{
+                  height: '36px', padding: '0 16px', borderRadius: 'var(--radius-md)', background: 'var(--accent-primary)',
+                  color: '#FFFFFF', border: 'none', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)',
+                }}>
+                  {status === 'loading' ? 'Subiendo…' : 'Subir archivo'}
+                </button>
+                <button onClick={e => { e.stopPropagation(); setFile(null); }} style={{
+                  height: '36px', padding: '0 12px', borderRadius: 'var(--radius-md)', background: 'none',
+                  border: '1px solid var(--border-input)', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'var(--font)',
+                }}>
+                  Quitar
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Arrastra tu Excel de carriers aquí</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>.xlsx</div>
+              <div style={{
+                height: '36px', padding: '0 16px', borderRadius: 'var(--radius-md)', background: 'var(--accent-primary)',
+                color: '#FFFFFF', display: 'flex', alignItems: 'center', fontSize: '12px', fontWeight: 700,
+              }}>
+                Subir archivo
+              </div>
+            </>
+          )}
+          <input id="carrier-file-input" type="file" accept=".xlsx" onChange={e => { const f = e.target.files[0]; if (f) validateAndSetFile(f); }} style={{ display: 'none' }} />
         </div>
       </div>
+
+      {error && (
+        <div style={{ fontSize: '13px', color: 'var(--alert-text)' }}>{error}</div>
+      )}
 
       {status === 'success' && result && (
         <div style={{
-          marginTop: '20px', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border)', overflow: 'hidden'
+          background: 'var(--success-bg)', border: '1px solid var(--success-text)', borderRadius: 'var(--radius-lg)',
+          padding: '18px 22px', display: 'flex', gap: '32px',
         }}>
-          <div style={{ padding: '16px 24px', background: 'var(--success-bg)', borderBottom: '1px solid rgba(22,163,74,0.15)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <CheckCircle2 size={18} style={{ color: 'var(--success)' }} />
-            <p style={{ fontSize: '14px', fontWeight: '600', color: '#15803d' }}>Import complete</p>
+          <div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: 'var(--success-text)' }}>{result.inserted}</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>nuevos</div>
           </div>
-          <div style={{ padding: '20px 24px', display: 'flex', gap: '28px' }}>
-            <div>
-              <p style={{ fontSize: '24px', fontWeight: '600', color: 'var(--success)' }}>{result.inserted}</p>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>new carriers</p>
-            </div>
-            <div>
-              <p style={{ fontSize: '24px', fontWeight: '600', color: 'var(--navy)' }}>{result.updated}</p>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>updated</p>
-            </div>
-            <div>
-              <p style={{ fontSize: '24px', fontWeight: '600', color: result.errorCount > 0 ? '#d97706' : 'var(--text-muted)' }}>{result.errorCount}</p>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>errors</p>
-            </div>
+          <div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>{result.updated}</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>actualizados</div>
           </div>
-          {result.errorCount > 0 && (
-            <div style={{ margin: '0 24px 20px', padding: '12px 16px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 'var(--radius-md)' }}>
-              <p style={{ fontSize: '12px', color: '#92400e', whiteSpace: 'pre-wrap', fontFamily: 'var(--mono)' }}>{result.errorList}</p>
-            </div>
-          )}
+          <div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: result.errorCount > 0 ? 'var(--alert-text)' : 'var(--text-secondary)' }}>{result.errorCount}</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>errores</div>
+          </div>
         </div>
       )}
 
-      <style>{`@keyframes spin { from{transform:rotate(0deg)}to{transform:rotate(360deg)} }`}</style>
+      {loadingList ? (
+        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
+      ) : (
+        <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
+          <CRow header cols={['Carrier', 'Servicio', 'Equipo', 'Correo']} />
+          {carriers.map(c => (
+            <CRow key={c.id} cols={[
+              <span key="n" style={{ fontWeight: 600 }}>{c.name}</span>,
+              <span key="g" style={{ color: 'var(--text-tertiary)' }}>{formatGeo(c.geographies)}</span>,
+              <span key="e" style={{ color: 'var(--text-tertiary)' }}>{formatEquipment(c.equipment_types)}</span>,
+              <span key="m" style={{ fontFamily: 'var(--mono)', color: 'var(--text-secondary)' }}>{c.email || '—'}</span>,
+            ]} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
