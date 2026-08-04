@@ -233,6 +233,7 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
               validUntil: null,
               transitDays: null,
               quoteId: null,
+              returnTo: 'rfq',
             });
           }}
           style={{
