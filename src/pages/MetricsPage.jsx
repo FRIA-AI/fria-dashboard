@@ -3,8 +3,20 @@ import { supabase } from '../supabaseClient';
 
 const BAR_COLORS = ['var(--accent-primary)', 'var(--accent-logo)'];
 
-function weekLabel(offset) {
-  return offset === 0 ? 'Esta semana' : `S-${offset}`;
+function formatWeekRange(start, end) {
+  const lastDay = new Date(end);
+  lastDay.setDate(lastDay.getDate() - 1); // 'end' es exclusivo, mostramos el último día real
+  const startDay = start.getDate();
+  const endDay = lastDay.getDate();
+  const startMonthShort = start.toLocaleDateString('es-MX', { month: 'short' });
+  const endMonthShort = lastDay.toLocaleDateString('es-MX', { month: 'short' });
+  const monthLabel = lastDay.toLocaleDateString('es-MX', { month: 'long' });
+
+  const rangeLabel = startMonthShort === endMonthShort
+    ? `${startDay}–${endDay} ${startMonthShort}`
+    : `${startDay} ${startMonthShort} – ${endDay} ${endMonthShort}`;
+
+  return { rangeLabel, monthLabel };
 }
 
 function isoWeekStart(d) {
@@ -218,18 +230,24 @@ export default function MetricsPage() {
               Cotizaciones por semana
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '28px', height: '160px', padding: '0 8px' }}>
-              {byWeek.map(b => (
-                <div key={b.offset} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: b.offset === 0 ? 'var(--text-secondary)' : 'var(--text-primary)' }}>
-                    {b.count}
+              {byWeek.map(b => {
+                const { rangeLabel, monthLabel } = formatWeekRange(b.start, b.end);
+                return (
+                  <div key={b.offset} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: b.offset === 0 ? 'var(--text-secondary)' : 'var(--text-primary)' }}>
+                      {b.count}
+                    </div>
+                    <div style={{
+                      width: '40px', height: `${Math.max(6, (b.count / maxWeek) * 120)}px`, borderRadius: '6px 6px 0 0',
+                      background: b.offset === 0 ? '#D7E0F2' : (b.count === maxWeek ? 'var(--accent-logo)' : 'var(--accent-primary)'),
+                    }} />
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', lineHeight: 1.3 }}>
+                      {rangeLabel}
+                      <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', textTransform: 'capitalize' }}>{monthLabel}</div>
+                    </div>
                   </div>
-                  <div style={{
-                    width: '40px', height: `${Math.max(6, (b.count / maxWeek) * 120)}px`, borderRadius: '6px 6px 0 0',
-                    background: b.offset === 0 ? '#D7E0F2' : (b.count === maxWeek ? 'var(--accent-logo)' : 'var(--accent-primary)'),
-                  }} />
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{weekLabel(b.offset)}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
