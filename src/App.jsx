@@ -38,13 +38,14 @@ export default function App() {
     }
     const { data: profile, error } = await supabase
       .from('tenant_users')
-      .select('first_name, last_name, role, email')
+      .select('id, first_name, last_name, role, email')
       .eq('auth_user_id', session.user.id)
       .single();
 
     if (error || !profile) {
       setUser({
         id: session.user.id,
+        tenantUserId: null,
         name: session.user.email,
         email: session.user.email,
         role: 'sales',
@@ -53,6 +54,7 @@ export default function App() {
     } else {
       setUser({
         id: session.user.id,
+        tenantUserId: profile.id,
         name: `${profile.first_name} ${profile.last_name}`.trim(),
         email: profile.email,
         role: profile.role,
