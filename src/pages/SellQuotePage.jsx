@@ -107,7 +107,7 @@ function buildQuoteHtml({ folio, cliente, vendedor, origin, destination, equipme
       </div>
 
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:10px;border-top:1px solid rgba(10,15,31,.06)">
-        <div style="font-size:9px;color:#8894B3">FRIA · cotizaciones@friaai.com · hecho con FRIA — Freight Rate Intelligence</div>
+        <div style="font-size:9px;color:#8894B3">FRIA · cotizaciones@friaai.com</div>
         <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8894B3">Página 1 de 1</div>
       </div>
     </div>
@@ -162,122 +162,165 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
 
   async function handleDownload() {
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
-    const L = 48, R = 564, W = R - L;
-    let y = 48;
 
-    // Barra superior (aproxima el gradiente del diseno con un color solido de marca)
-    doc.setFillColor(46, 91, 168);
-    doc.rect(0, 0, 612, 8, 'F');
+    // El diseno original de Claude Design se construyo a 700px de ancho para
+    // una pagina carta de 612pt -- escalamos cada medida con este mismo factor
+    // para que las proporciones queden exactas, no aproximadas a ojo.
+    const SCALE = 612 / 700;
+    const px = n => n * SCALE;
 
-    // Header: logo + fecha/folio
+    const L = px(48);
+    const R = 612 - px(48);
+    const W = R - L;
+
+    function gradientRect(x, yTop, w, h, colorA, colorB, direction = 'h') {
+      const steps = 40;
+      for (let i = 0; i < steps; i++) {
+        const t = i / (steps - 1);
+        const r = Math.round(colorA[0] + (colorB[0] - colorA[0]) * t);
+        const g = Math.round(colorA[1] + (colorB[1] - colorA[1]) * t);
+        const b = Math.round(colorA[2] + (colorB[2] - colorA[2]) * t);
+        doc.setFillColor(r, g, b);
+        if (direction === 'h') {
+          doc.rect(x + (w / steps) * i, yTop, w / steps + 0.5, h, 'F');
+        } else {
+          doc.rect(x, yTop + (h / steps) * i, w, h / steps + 0.5, 'F');
+        }
+      }
+    }
+
+    function drawLogoMark(x, yBase, sizePx = 22) {
+      const barW = px(6), gap = px(3), markH = px(sizePx);
+      const heights = [0.40, 0.65, 1.00, 0.80, 0.55];
+      const colors = [[10, 15, 31], [46, 91, 168], [77, 142, 255], [123, 167, 238], [10, 15, 31]];
+      let bx = x;
+      heights.forEach((hPct, i) => {
+        const barH = markH * hPct;
+        doc.setFillColor(...colors[i]);
+        doc.rect(bx, yBase - barH, barW, barH, 'F');
+        bx += barW + gap;
+      });
+      return bx - gap; // x donde termina el simbolo
+    }
+
+    // Barra superior -- degradado real, no color solido
+    gradientRect(0, 0, 612, px(8), [77, 142, 255], [46, 91, 168], 'h');
+
+    let y = px(48);
+
+    // Header: simbolo + wordmark a la izquierda, fecha/folio a la derecha
+    const markEndX = drawLogoMark(L, y - px(2), 22);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(17);
+    doc.setFontSize(px(20));
     doc.setTextColor(10, 15, 31);
-    doc.text('FRIA', L, y);
+    doc.text('FRIA', markEndX + px(10), y - px(6));
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
+    doc.setFontSize(px(9));
     doc.setTextColor(92, 107, 138);
-    doc.text('FREIGHT RATE INTELLIGENCE', L, y + 11);
+    doc.text('FREIGHT RATE INTELLIGENCE', markEndX + px(10), y + px(6));
 
-    doc.setFontSize(8);
-    doc.text('FECHA', R, y - 14, { align: 'right' });
-    doc.setFont('courier', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(10, 15, 31);
-    doc.text(todayLabel(), R, y - 3, { align: 'right' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(px(9));
     doc.setTextColor(92, 107, 138);
-    doc.text('FOLIO', R, y + 12, { align: 'right' });
+    doc.text('FECHA', R, y - px(14), { align: 'right' });
     doc.setFont('courier', 'normal');
-    doc.setFontSize(9);
+    doc.setFontSize(px(12));
     doc.setTextColor(10, 15, 31);
-    doc.text(String(context.quoteNumber || '—'), R, y + 23, { align: 'right' });
+    doc.text(todayLabel(), R, y - px(2), { align: 'right' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(px(9));
+    doc.setTextColor(92, 107, 138);
+    doc.text('FOLIO', R, y + px(11), { align: 'right' });
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(px(11));
+    doc.setTextColor(10, 15, 31);
+    doc.text(String(context.quoteNumber || '—'), R, y + px(23), { align: 'right' });
 
-    y += 34;
+    y += px(24 + 24);
     doc.setDrawColor(220, 224, 232);
     doc.setLineWidth(0.75);
-    doc.line(L, y, R, y);
+    doc.line(L, y - px(24), R, y - px(24));
 
-    y += 30;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(19);
+    doc.setFontSize(px(24));
     doc.setTextColor(10, 15, 31);
     doc.text('Cotización de flete', L, y);
 
     // Cliente / Vendedor
-    y += 26;
+    y += px(22 + 4);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(px(10));
     doc.setTextColor(92, 107, 138);
     doc.text('CLIENTE', L, y);
     doc.text('VENDEDOR', L + W / 2, y);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
+    doc.setFontSize(px(15));
     doc.setTextColor(10, 15, 31);
-    doc.text(cliente || '—', L, y + 15);
-    doc.text(user?.name || '—', L + W / 2, y + 15);
+    doc.text(cliente || '—', L, y + px(15));
+    doc.text(user?.name || '—', L + W / 2, y + px(15));
 
     // Tarjeta de ruta
-    y += 32;
-    const routeCardH = 42;
+    y += px(26);
+    const routeCardH = px(20 * 2 + 19);
     doc.setFillColor(245, 248, 253);
     doc.setDrawColor(230, 234, 242);
-    doc.roundedRect(L, y, W, routeCardH, 8, 8, 'FD');
-    const midY = y + routeCardH / 2 + 4;
+    doc.roundedRect(L, y, W, routeCardH, px(10), px(10), 'FD');
+    const midY = y + routeCardH / 2 + px(5);
+
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
+    doc.setFontSize(px(19));
     doc.setTextColor(10, 15, 31);
     const originText = String(context.origin || '—');
-    doc.text(originText, L + 16, midY);
+    doc.text(originText, L + px(22), midY);
     const originW = doc.getTextWidth(originText);
 
-    // Flecha dibujada como vector -- nunca depende de si la fuente soporta el glifo "→"
-    const arrowX = L + 16 + originW + 10;
+    // Flecha dibujada como vector -- nunca depende de si la fuente soporta "→"
+    const arrowX = L + px(22) + originW + px(10);
     doc.setDrawColor(77, 142, 255);
     doc.setLineWidth(1.6);
-    doc.line(arrowX, midY - 4, arrowX + 16, midY - 4);
-    doc.line(arrowX + 16, midY - 4, arrowX + 11, midY - 8);
-    doc.line(arrowX + 16, midY - 4, arrowX + 11, midY);
+    doc.line(arrowX, midY - px(4), arrowX + px(16), midY - px(4));
+    doc.line(arrowX + px(16), midY - px(4), arrowX + px(11), midY - px(8));
+    doc.line(arrowX + px(16), midY - px(4), arrowX + px(11), midY);
 
     doc.setTextColor(10, 15, 31);
-    doc.text(String(context.destination || '—'), arrowX + 24, midY);
+    doc.text(String(context.destination || '—'), arrowX + px(24), midY);
 
     const equipLabel = (context.equipment || '—').replace(/_/g, ' ').toUpperCase();
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
+    doc.setFontSize(px(11));
     doc.setTextColor(46, 91, 168);
-    const equipW = doc.getTextWidth(equipLabel) + 20;
+    const equipW = doc.getTextWidth(equipLabel) + px(24);
     doc.setFillColor(234, 240, 251);
-    doc.roundedRect(R - 16 - equipW, y + 11, equipW, 20, 10, 10, 'F');
-    doc.text(equipLabel, R - 16 - equipW / 2, y + 24, { align: 'center' });
+    doc.roundedRect(R - px(22) - equipW, y + px(11), equipW, px(21), px(10), px(10), 'F');
+    doc.text(equipLabel, R - px(22) - equipW / 2, y + px(24), { align: 'center' });
 
-    // Tarjeta de tarifa
-    y += routeCardH + 12;
-    const rateCardH = 56;
-    doc.setFillColor(234, 240, 251);
+    // Tarjeta de tarifa -- degradado real, sin mencionar al carrier
+    y += routeCardH + px(14);
+    const rateCardH = px(18 * 2 + 34);
+    gradientRect(L, y, W, rateCardH, [234, 240, 251], [245, 248, 253], 'h');
     doc.setDrawColor(77, 142, 255);
-    doc.setLineWidth(1.2);
-    doc.roundedRect(L, y, W, rateCardH, 9, 9, 'FD');
+    doc.setLineWidth(1.3);
+    doc.roundedRect(L, y, W, rateCardH, px(12), px(12), 'D');
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(px(10));
     doc.setTextColor(46, 91, 168);
-    doc.text('TARIFA COTIZADA', L + 18, y + 18);
+    doc.text('TARIFA COTIZADA', L + px(24), y + px(22));
     doc.setFont('courier', 'bold');
-    doc.setFontSize(26);
+    doc.setFontSize(px(34));
     doc.setTextColor(10, 15, 31);
-    doc.text(`$${finalRate.toLocaleString()}`, L + 18, y + 42);
-    const rateW = doc.getTextWidth(`$${finalRate.toLocaleString()}`);
+    const rateText = `$${finalRate.toLocaleString()}`;
+    doc.text(rateText, L + px(24), y + px(50));
+    const rateW = doc.getTextWidth(rateText);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
+    doc.setFontSize(px(15));
     doc.setTextColor(92, 107, 138);
-    doc.text(currency, L + 18 + rateW + 8, y + 42);
+    doc.text(currency, L + px(24) + rateW + px(8), y + px(50));
 
     // Fila de meta: vigencia / transito / condiciones de pago
-    y += rateCardH + 20;
+    y += rateCardH + px(16 + 14);
     doc.setDrawColor(230, 234, 242);
     doc.setLineWidth(0.75);
-    doc.line(L, y - 8, R, y - 8);
+    doc.line(L, y - px(14), R, y - px(14));
     const colW = W / 3;
     const metaCols = [
       ['VIGENCIA', validUntil ? `Hasta ${validUntil}` : '—'],
@@ -287,35 +330,35 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     metaCols.forEach(([label, value], i) => {
       const cx = L + i * colW;
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
+      doc.setFontSize(px(9.5));
       doc.setTextColor(92, 107, 138);
       doc.text(label, cx, y);
       doc.setFont('courier', 'normal');
-      doc.setFontSize(10);
+      doc.setFontSize(px(12));
       doc.setTextColor(10, 15, 31);
-      const lines = doc.splitTextToSize(value, colW - 12);
-      doc.text(lines, cx, y + 13);
+      const lines = doc.splitTextToSize(value, colW - px(12));
+      doc.text(lines, cx, y + px(16));
     });
 
-    // Condiciones generales -- lista real en 2 columnas
-    y += 34;
+    // Condiciones generales -- lista real en 2 columnas, texto exacto sin acortar
+    y += px(34);
     doc.setDrawColor(230, 234, 242);
     doc.line(L, y, R, y);
-    y += 16;
+    y += px(18);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
+    doc.setFontSize(px(10));
     doc.setTextColor(10, 15, 31);
     doc.text('CONDICIONES GENERALES', L, y);
-    y += 12;
+    y += px(12);
 
-    const colGap = 20;
+    const colGap = px(26);
     const condColW = (W - colGap) / 2;
     const half = Math.ceil(CONDICIONES_GENERALES.length / 2);
     const leftItems = CONDICIONES_GENERALES.slice(0, half);
     const rightItems = CONDICIONES_GENERALES.slice(half);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.7);
+    doc.setFontSize(px(7.6));
     doc.setTextColor(58, 69, 96);
 
     function renderList(items, x) {
@@ -323,24 +366,28 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
       items.forEach(item => {
         const lines = doc.splitTextToSize(`•  ${item}`, condColW);
         doc.text(lines, x, cy);
-        cy += lines.length * 8 + 2;
+        cy += lines.length * px(7.6 * 1.5) + px(1);
       });
       return cy;
     }
     const leftEndY = renderList(leftItems, L);
     const rightEndY = renderList(rightItems, L + condColW + colGap);
-    y = Math.max(leftEndY, rightEndY) + 8;
+    y = Math.max(leftEndY, rightEndY) + px(8);
 
-    // Footer
+    // Footer -- exactamente como en el handoff, sin texto adicional.
+    // Anclado cerca del final de la pagina (como el diseno original, que
+    // usa flex:1 para que las condiciones empujen el footer hasta abajo)
+    // en vez de dejarlo pegado justo despues de la lista.
+    const footerLineY = Math.max(y + px(20), 792 - px(40));
     doc.setDrawColor(230, 234, 242);
-    doc.line(L, y, R, y);
-    y += 12;
+    doc.line(L, footerLineY, R, footerLineY);
+    const footerTextY = footerLineY + px(14);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
+    doc.setFontSize(px(9));
     doc.setTextColor(136, 148, 179);
-    doc.text('FRIA · cotizaciones@friaai.com · hecho con FRIA — Freight Rate Intelligence', L, y);
+    doc.text('FRIA · cotizaciones@friaai.com', L, footerTextY);
     doc.setFont('courier', 'normal');
-    doc.text('Página 1 de 1', R, y, { align: 'right' });
+    doc.text('Página 1 de 1', R, footerTextY, { align: 'right' });
 
     doc.save(`Cotizacion_${context.quoteNumber || 'FRIA'}.pdf`);
 
