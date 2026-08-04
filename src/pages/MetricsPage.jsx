@@ -3,6 +3,15 @@ import { supabase } from '../supabaseClient';
 
 const BAR_COLORS = ['var(--accent-primary)', 'var(--accent-logo)'];
 
+const STATUS_MAP = {
+  pending: { label: 'Pendiente', bg: '#EEF1F8', color: 'var(--text-secondary)' },
+  rfq_sent: { label: 'RFQs enviados', bg: '#E6EEFB', color: 'var(--accent-primary)' },
+  responses_received: { label: 'Respuestas recibidas', bg: '#E6EEFB', color: 'var(--accent-primary)' },
+  analysis_ready: { label: 'Análisis listo', bg: 'var(--success-bg)', color: 'var(--success-text)' },
+  sold: { label: 'Vendida', bg: 'var(--success-bg)', color: 'var(--success-text)' },
+  cancelled: { label: 'Cancelada', bg: 'var(--alert-bg)', color: 'var(--alert-text)' },
+};
+
 function formatWeekRange(start, end) {
   const lastDay = new Date(end);
   lastDay.setDate(lastDay.getDate() - 1); // 'end' es exclusivo, mostramos el último día real
@@ -99,20 +108,41 @@ const Select = ({ value, onChange, options, placeholder }) => (
   </select>
 );
 
+const PRow = ({ header, cols }) => (
+  <div style={{
+    display: 'grid', gridTemplateColumns: '1.4fr 1.4fr 1fr 1fr 1.1fr',
+    padding: header ? '12px 22px' : '14px 22px',
+    background: '#FFFFFF',
+    borderTop: header ? 'none' : '1px solid var(--border-card)',
+    fontSize: header ? '11px' : '13px',
+    fontWeight: header ? 600 : 400,
+    color: header ? 'var(--text-secondary)' : 'var(--text-primary)',
+    textTransform: header ? 'uppercase' : 'none',
+    letterSpacing: header ? '.04em' : 'normal',
+    alignItems: 'center',
+  }}>
+    {cols.map((c, i) => <div key={i}>{c}</div>)}
+  </div>
+);
+
 export default function MetricsPage() {
   const [tab, setTab] = useState('Resumen de equipo');
   const [quotes, setQuotes] = useState([]);
   const [sellersById, setSellersById] = useState({});
+  const [rfqStats, setRfqStats] = useState({});
   const [loading, setLoading] = useState(true);
 
   const [filterSeller, setFilterSeller] = useState('');
   const [filterLane, setFilterLane] = useState('');
+  const [panSeller, setPanSeller] = useState('');
+  const [panLane, setPanLane] = useState('');
 
   useEffect(() => {
     async function load() {
       const { data: quotesData, error } = await supabase
         .from('quotes')
-        .select('id, origin_city, destination_city, requested_by, created_at');
+        .select('id, quote_number, origin_city, destination_city, status, requested_by, created_at')
+        .order('created_at', { ascending: false });
 
       if (error || !quotesData) { setLoading(false); return; }
 
@@ -126,8 +156,30 @@ export default function MetricsPage() {
         (sellers || []).forEach(s => { names[s.id] = s.first_name; });
       }
 
+      const quoteIds = quotesData.map(q => q.id);
+      let rfqStatsByQuote = {};
+      if (quoteIds.length) {
+        const { data: rfqData } = await supabase
+          .from('quote_rfqs')
+          .select('quote_id, status, quoted_rate')
+          .in('quote_id', quoteIds);
+
+        (rfqData || []).forEach(r => {
+          if (!rfqStatsByQuote[r.quote_id]) {
+            rfqStatsByQuote[r.quote_id] = { contacted: 0, responded: 0, bestRate: null };
+          }
+          const stat = rfqStatsByQuote[r.quote_id];
+          stat.contacted += 1;
+          if (r.status === 'responded') {
+            stat.responded += 1;
+            if (r.quoted_rate && (!stat.bestRate || r.quoted_rate < stat.bestRate)) stat.bestRate = r.quoted_rate;
+          }
+        });
+      }
+
       setQuotes(quotesData);
       setSellersById(names);
+      setRfqStats(rfqStatsByQuote);
       setLoading(false);
     }
     load();
@@ -184,14 +236,69 @@ export default function MetricsPage() {
 
   const maxWeek = Math.max(...byWeek.map(b => b.count), 1);
 
+  const panoramaRows = useMemo(() => {
+    return quotes
+      .filter(q => {
+        if (panSeller && sellersById[q.requested_by] !== panSeller) return false;
+        if (panLane && `${q.origin_city} → ${q.destination_city}` !== panLane) return false;
+        return true;
+      })
+      .map(q => ({ ...q, stats: rfqStats[q.id] || { contacted: 0, responded: 0, bestRate: null } }));
+  }, [quotes, panSeller, panLane, sellersById, rfqStats]);
+
   return (
     <div>
       <TabBar tab={tab} setTab={setTab} />
 
       {tab === 'Panorama general' ? (
-        <div style={{ padding: '36px 56px 48px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-          En construcción — próxima pantalla en la lista.
-        </div>
+        loading ? (
+          <div style={{ padding: '36px 56px', fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
+        ) : (
+          <div style={{ padding: '36px 56px 48px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              Histórico y análisis de las cotizaciones de todo el equipo, no solo las propias.
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <Select value={panSeller} onChange={setPanSeller} options={sellerOptions} placeholder="Vendedor" />
+              <Select value={panLane} onChange={setPanLane} options={laneOptions} placeholder="Ruta" />
+            </div>
+
+            {panoramaRows.length === 0 ? (
+              <div style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
+                padding: '48px', textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)',
+              }}>
+                Sin resultados para este filtro.
+              </div>
+            ) : (
+              <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
+                <PRow header cols={['RFQ / Vendedor', 'Ruta', 'Carriers', 'Mejor tarifa', 'Estado']} />
+                {panoramaRows.map(q => {
+                  const st = STATUS_MAP[q.status] || STATUS_MAP.pending;
+                  return (
+                    <PRow key={q.id} cols={[
+                      <div key="rv">
+                        <div style={{ fontFamily: 'var(--mono)', fontWeight: 600 }}>{q.quote_number}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{sellersById[q.requested_by] || 'Sin asignar'}</div>
+                      </div>,
+                      <span key="lane">{q.origin_city} → {q.destination_city}</span>,
+                      <span key="c" style={{ fontFamily: 'var(--mono)', color: 'var(--text-tertiary)' }}>
+                        {q.stats.responded}/{q.stats.contacted}
+                      </span>,
+                      <span key="rate" style={{ fontFamily: 'var(--mono)', color: q.stats.bestRate ? 'var(--success-text)' : 'var(--text-secondary)' }}>
+                        {q.stats.bestRate ? `$${q.stats.bestRate.toLocaleString()}` : '—'}
+                      </span>,
+                      <span key="s" style={{
+                        padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600,
+                        background: st.bg, color: st.color,
+                      }}>{st.label}</span>,
+                    ]} />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )
       ) : loading ? (
         <div style={{ padding: '36px 56px', fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
       ) : (
