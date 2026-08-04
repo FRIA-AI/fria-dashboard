@@ -30,19 +30,34 @@ export default function HistoryPage({ user }) {
   useEffect(() => {
     async function load() {
       if (!user.tenantUserId) { setLoading(false); return; }
-      const { data, error } = await supabase
+
+      const { data: quotesData, error: quotesError } = await supabase
         .from('quotes')
-        .select('id, quote_number, origin_city, destination_city, status, created_at, quote_rfqs(quoted_rate, status)')
+        .select('id, quote_number, origin_city, destination_city, status, created_at')
         .eq('requested_by', user.tenantUserId)
         .order('created_at', { ascending: false });
 
-      if (!error && data) {
-        setRows(data.map(q => {
-          const responded = (q.quote_rfqs || []).filter(r => r.status === 'responded' && r.quoted_rate);
-          const bestRate = responded.length ? Math.min(...responded.map(r => r.quoted_rate)) : null;
-          return { ...q, bestRate };
-        }));
+      if (quotesError || !quotesData) { setLoading(false); return; }
+
+      const quoteIds = quotesData.map(q => q.id);
+      let ratesByQuote = {};
+
+      if (quoteIds.length) {
+        const { data: rfqData } = await supabase
+          .from('quote_rfqs')
+          .select('quote_id, quoted_rate, status')
+          .in('quote_id', quoteIds)
+          .eq('status', 'responded');
+
+        (rfqData || []).forEach(r => {
+          if (!r.quoted_rate) return;
+          if (!ratesByQuote[r.quote_id] || r.quoted_rate < ratesByQuote[r.quote_id]) {
+            ratesByQuote[r.quote_id] = r.quoted_rate;
+          }
+        });
       }
+
+      setRows(quotesData.map(q => ({ ...q, bestRate: ratesByQuote[q.id] || null })));
       setLoading(false);
     }
     load();
@@ -201,25 +216,6 @@ function DetalleRFQ({ quote, onBack }) {
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-function DRow({ header, cols }) {
-  return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr 1.4fr',
-      padding: header ? '12px 22px' : '14px 22px',
-      background: '#FFFFFF',
-      borderTop: header ? 'none' : '1px solid var(--border-card)',
-      fontSize: header ? '11px' : '13px',
-      fontWeight: header ? 600 : 400,
-      color: header ? 'var(--text-secondary)' : 'var(--text-primary)',
-      textTransform: header ? 'uppercase' : 'none',
-      letterSpacing: header ? '.04em' : 'normal',
-      alignItems: 'center',
-    }}>
-      {cols.map((c, i) => <div key={i}>{c}</div>)}
     </div>
   );
 }
