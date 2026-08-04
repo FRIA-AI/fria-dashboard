@@ -1,171 +1,239 @@
-import { BarChart2, Users, Route, TrendingUp, Inbox } from 'lucide-react';
-import { getMetrics } from '../store';
+import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../supabaseClient';
 
-export default function MetricsPage({ user }) {
-  const metrics = getMetrics();
+const BAR_COLORS = ['var(--accent-primary)', 'var(--accent-logo)'];
 
-  const colors = ['var(--coral)', '#0A0F1F', '#3b82f6', '#16a34a', '#d97706', '#7c3aed'];
+function weekLabel(offset) {
+  return offset === 0 ? 'Esta semana' : `S-${offset}`;
+}
 
-  const maxUserCount = Math.max(...metrics.byUser.map(u => u.count), 1);
-  const maxLaneCount = Math.max(...metrics.byLane.map(l => l.count), 1);
+function isoWeekStart(d) {
+  const date = new Date(d);
+  const day = (date.getDay() + 6) % 7; // lunes = 0
+  date.setDate(date.getDate() - day);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
+const TabBar = ({ tab, setTab }) => (
+  <div style={{ display: 'flex', gap: '22px', padding: '20px 56px 0' }}>
+    {['Resumen de equipo', 'Panorama general'].map(t => (
+      <div
+        key={t}
+        onClick={() => setTab(t)}
+        style={{
+          fontSize: '13px', fontWeight: 600, cursor: 'pointer', paddingBottom: '10px',
+          color: tab === t ? 'var(--accent-primary)' : 'var(--text-secondary)',
+          borderBottom: tab === t ? '2px solid var(--accent-primary)' : '2px solid transparent',
+        }}
+      >
+        {t}
+      </div>
+    ))}
+  </div>
+);
+
+const StatCard = ({ label, value }) => (
+  <div style={{
+    background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
+    padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: '10px',
+  }}>
+    <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+      {label}
+    </div>
+    <div style={{ fontFamily: 'var(--mono)', fontSize: '28px', fontWeight: 700, color: 'var(--text-primary)' }}>
+      {value}
+    </div>
+  </div>
+);
+
+const BarList = ({ title, items, color }) => {
+  const max = Math.max(...items.map(i => i.count), 1);
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
-      <div style={{ marginBottom: '28px' }}>
-        <h1 style={{ fontSize: '26px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>Team Metrics</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Quote activity across the commercial team</p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '28px' }}>
-        <StatCard icon={<TrendingUp size={18} />} label="Total Quotes" value={metrics.total} />
-        <StatCard icon={<Users size={18} />} label="Active Sellers" value={metrics.byUser.length} />
-        <StatCard icon={<Route size={18} />} label="Unique Lanes" value={metrics.byLane.length} />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
-        <div style={{
-          background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border)', padding: '22px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-            <Users size={16} style={{ color: 'var(--coral)' }} />
-            <h2 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>Quotes by Seller</h2>
-          </div>
-
-          {metrics.byUser.length === 0 ? (
-            <EmptyState label="No data yet" />
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {metrics.byUser.map((u, i) => (
-                <div key={u.name}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                    <div>
-                      <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)' }}>
-                        {u.name.split(' ')[0]}
-                      </span>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>
-                        {u.lanes} lane{u.lanes !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: colors[i % colors.length] }}>
-                      {u.count}
-                    </span>
-                  </div>
-                  <div style={{ height: '6px', background: 'var(--bg)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%', borderRadius: '3px',
-                      background: colors[i % colors.length],
-                      width: `${Math.round((u.count / maxUserCount) * 100)}%`,
-                      transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)'
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div style={{
-          background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border)', padding: '22px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-            <Route size={16} style={{ color: 'var(--coral)' }} />
-            <h2 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>Top Lanes</h2>
-          </div>
-
-          {metrics.byLane.length === 0 ? (
-            <EmptyState label="No lanes detected yet" />
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {metrics.byLane.slice(0, 8).map((l, i) => (
-                <div key={l.lane}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                    <div style={{ flex: 1, minWidth: 0, marginRight: '12px' }}>
-                      <span style={{
-                        fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)',
-                        display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                      }}>
-                        {l.lane}
-                      </span>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {l.users} seller{l.users !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--navy)', flexShrink: 0 }}>
-                      {l.count}
-                    </span>
-                  </div>
-                  <div style={{ height: '6px', background: 'var(--bg)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%', borderRadius: '3px', background: 'var(--navy)',
-                      width: `${Math.round((l.count / maxLaneCount) * 100)}%`,
-                      transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)'
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {metrics.byUser.some(u => u.name === user.name) && (
-        <div style={{
-          marginTop: '18px', background: 'rgba(10,15,31,0.04)',
-          borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', padding: '18px 22px'
-        }}>
-          <p style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
-            Your activity
-          </p>
-          {(() => {
-            const me = metrics.byUser.find(u => u.name === user.name);
-            return me ? (
-              <div style={{ display: 'flex', gap: '28px' }}>
-                <div>
-                  <p style={{ fontSize: '26px', fontWeight: '600', color: 'var(--coral)' }}>{me.count}</p>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>quotes submitted</p>
-                </div>
-                <div>
-                  <p style={{ fontSize: '26px', fontWeight: '600', color: 'var(--navy)' }}>{me.lanes}</p>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>unique lanes</p>
-                </div>
-                <div>
-                  <p style={{ fontSize: '26px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                    #{metrics.byUser.findIndex(u => u.name === user.name) + 1}
-                  </p>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>team ranking</p>
-                </div>
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
+      padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px',
+    }}>
+      <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{title}</div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Sin datos todavía.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {items.map(item => (
+            <div key={item.label}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '5px' }}>
+                <span>{item.label}</span>
+                <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--text-primary)' }}>{item.count}</span>
               </div>
-            ) : null;
-          })()}
+              <div style={{ height: '10px', borderRadius: '5px', background: '#EEF1F8' }}>
+                <div style={{ width: `${(item.count / max) * 100}%`, height: '100%', borderRadius: '5px', background: color }} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
-}
+};
 
-function StatCard({ icon, label, value }) {
-  return (
-    <div style={{
-      background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)',
-      border: '1px solid var(--border)', padding: '18px 20px'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: 'var(--coral)' }}>
-        {icon}
-        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-      </div>
-      <p style={{ fontSize: '32px', fontWeight: '600', color: 'var(--text-primary)' }}>{value}</p>
-    </div>
-  );
-}
+const Select = ({ value, onChange, options, placeholder }) => (
+  <select value={value} onChange={e => onChange(e.target.value)} style={{
+    height: '36px', padding: '0 12px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
+    border: '1px solid var(--border-input)', fontSize: '12px', color: 'var(--text-tertiary)',
+    fontFamily: 'var(--font)', outline: 'none',
+  }}>
+    <option value="">{placeholder}: Todos</option>
+    {options.map(o => <option key={o} value={o}>{o}</option>)}
+  </select>
+);
 
-function EmptyState({ label }) {
+export default function MetricsPage() {
+  const [tab, setTab] = useState('Resumen de equipo');
+  const [quotes, setQuotes] = useState([]);
+  const [sellersById, setSellersById] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  const [filterSeller, setFilterSeller] = useState('');
+  const [filterLane, setFilterLane] = useState('');
+
+  useEffect(() => {
+    async function load() {
+      const { data: quotesData, error } = await supabase
+        .from('quotes')
+        .select('id, origin_city, destination_city, requested_by, created_at');
+
+      if (error || !quotesData) { setLoading(false); return; }
+
+      const sellerIds = [...new Set(quotesData.map(q => q.requested_by).filter(Boolean))];
+      let names = {};
+      if (sellerIds.length) {
+        const { data: sellers } = await supabase
+          .from('tenant_users')
+          .select('id, first_name')
+          .in('id', sellerIds);
+        (sellers || []).forEach(s => { names[s.id] = s.first_name; });
+      }
+
+      setQuotes(quotesData);
+      setSellersById(names);
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  const sellerOptions = useMemo(() => [...new Set(Object.values(sellersById))].sort(), [sellersById]);
+  const laneOptions = useMemo(() => {
+    const set = new Set(quotes.map(q => `${q.origin_city} → ${q.destination_city}`));
+    return [...set].sort();
+  }, [quotes]);
+
+  const filteredQuotes = useMemo(() => {
+    return quotes.filter(q => {
+      if (filterSeller && sellersById[q.requested_by] !== filterSeller) return false;
+      if (filterLane && `${q.origin_city} → ${q.destination_city}` !== filterLane) return false;
+      return true;
+    });
+  }, [quotes, filterSeller, filterLane, sellersById]);
+
+  const bySeller = useMemo(() => {
+    const counts = {};
+    quotes.forEach(q => {
+      const name = sellersById[q.requested_by] || 'Sin asignar';
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    return Object.entries(counts).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count).slice(0, 6);
+  }, [quotes, sellersById]);
+
+  const byLane = useMemo(() => {
+    const counts = {};
+    quotes.forEach(q => {
+      const label = `${q.origin_city} → ${q.destination_city}`;
+      counts[label] = (counts[label] || 0) + 1;
+    });
+    return Object.entries(counts).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count).slice(0, 6);
+  }, [quotes]);
+
+  const byWeek = useMemo(() => {
+    const now = new Date();
+    const buckets = [4, 3, 2, 1, 0].map(offset => {
+      const start = new Date(isoWeekStart(now));
+      start.setDate(start.getDate() - offset * 7);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 7);
+      return { offset, start, end, count: 0 };
+    });
+    filteredQuotes.forEach(q => {
+      const created = new Date(q.created_at);
+      const bucket = buckets.find(b => created >= b.start && created < b.end);
+      if (bucket) bucket.count += 1;
+    });
+    return buckets;
+  }, [filteredQuotes]);
+
+  const maxWeek = Math.max(...byWeek.map(b => b.count), 1);
+
   return (
-    <div style={{ padding: '30px 0', textAlign: 'center' }}>
-      <Inbox size={24} style={{ color: 'var(--text-muted)', margin: '0 auto 10px' }} />
-      <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{label}</p>
-      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Submit quotes to start tracking metrics</p>
+    <div>
+      <TabBar tab={tab} setTab={setTab} />
+
+      {tab === 'Panorama general' ? (
+        <div style={{ padding: '36px 56px 48px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+          En construcción — próxima pantalla en la lista.
+        </div>
+      ) : loading ? (
+        <div style={{ padding: '36px 56px', fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
+      ) : (
+        <div style={{ padding: '36px 56px 48px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+            <StatCard label="Cotizaciones totales" value={quotes.length} />
+            <StatCard label="Vendedores activos" value={sellerOptions.length} />
+            <StatCard label="Rutas únicas" value={laneOptions.length} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <BarList title="Cotizaciones por vendedor" items={bySeller} color={BAR_COLORS[0]} />
+            <BarList title="Rutas más cotizadas" items={byLane} color={BAR_COLORS[1]} />
+          </div>
+
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
+            padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>Explorador de cotizaciones</div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Select value={filterSeller} onChange={setFilterSeller} options={sellerOptions} placeholder="Vendedor" />
+                <Select value={filterLane} onChange={setFilterLane} options={laneOptions} placeholder="Ruta" />
+                <div title="Disponible próximamente" style={{
+                  height: '36px', padding: '0 14px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
+                  border: '1px solid var(--border-input)', display: 'flex', alignItems: 'center',
+                  fontSize: '12px', color: 'var(--text-secondary)', opacity: 0.6, cursor: 'not-allowed',
+                }}>
+                  Carrier: Todos ▾
+                </div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+              Cotizaciones por semana
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '28px', height: '160px', padding: '0 8px' }}>
+              {byWeek.map(b => (
+                <div key={b.offset} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: b.offset === 0 ? 'var(--text-secondary)' : 'var(--text-primary)' }}>
+                    {b.count}
+                  </div>
+                  <div style={{
+                    width: '40px', height: `${Math.max(6, (b.count / maxWeek) * 120)}px`, borderRadius: '6px 6px 0 0',
+                    background: b.offset === 0 ? '#D7E0F2' : (b.count === maxWeek ? 'var(--accent-logo)' : 'var(--accent-primary)'),
+                  }} />
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{weekLabel(b.offset)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
