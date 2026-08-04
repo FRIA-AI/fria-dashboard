@@ -43,6 +43,9 @@ export default function RateCardsPage() {
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
 
+  const [lanes, setLanes] = useState([]);
+  const [loadingLanes, setLoadingLanes] = useState(true);
+
   useEffect(() => {
     async function load() {
       const { data: rateCards, error } = await supabase
@@ -78,14 +81,89 @@ export default function RateCardsPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    async function loadLanes() {
+      const { data: quotesData, error } = await supabase
+        .from('quotes')
+        .select('id, origin_city, destination_city, equipment_type');
+      if (error || !quotesData) { setLoadingLanes(false); return; }
+
+      const quoteIds = quotesData.map(q => q.id);
+      let ratesByQuote = {};
+      if (quoteIds.length) {
+        const { data: rfqData } = await supabase
+          .from('quote_rfqs')
+          .select('quote_id, quoted_rate, status')
+          .in('quote_id', quoteIds)
+          .eq('status', 'responded');
+        (rfqData || []).forEach(r => {
+          if (!r.quoted_rate) return;
+          if (!ratesByQuote[r.quote_id]) ratesByQuote[r.quote_id] = [];
+          ratesByQuote[r.quote_id].push(r.quoted_rate);
+        });
+      }
+
+      const grouped = {};
+      quotesData.forEach(q => {
+        const key = `${q.origin_city}|${q.destination_city}|${q.equipment_type}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            lane: `${q.origin_city} → ${q.destination_city}`,
+            equipment: (q.equipment_type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+            count: 0, rates: [],
+          };
+        }
+        grouped[key].count += 1;
+        grouped[key].rates.push(...(ratesByQuote[q.id] || []));
+      });
+
+      setLanes(Object.values(grouped).sort((a, b) => b.count - a.count));
+      setLoadingLanes(false);
+    }
+    loadLanes();
+  }, []);
+
   return (
     <div>
       <TabBar tab={tab} setTab={setTab} />
 
       {tab === 'Rutas' ? (
-        <div style={{ padding: '36px 56px 48px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-          En construcción — próxima pantalla en la lista.
-        </div>
+        loadingLanes ? (
+          <div style={{ padding: '36px 56px', fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
+        ) : (
+          <div style={{ padding: '36px 56px 48px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{
+              fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, background: 'var(--bg-card)',
+              border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)', padding: '14px 18px',
+            }}>
+              Vista interna con lo observado por FRIA. Los benchmarks de mercado completos están en{' '}
+              <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>Market Intelligence</span> (próximamente).
+            </div>
+
+            {lanes.length === 0 ? (
+              <div style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
+                padding: '48px', textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)',
+              }}>
+                Todavía no hay cotizaciones registradas.
+              </div>
+            ) : (
+              <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
+                <TRow header cols={['Ruta', 'Equipo', '# Cotizaciones', 'Tarifa mín–máx observada']} widths="1.6fr 1fr 1fr 1.4fr" />
+                {lanes.map((l, i) => (
+                  <TRow key={i} widths="1.6fr 1fr 1fr 1.4fr" cols={[
+                    <span key="l" style={{ fontWeight: 600 }}>{l.lane}</span>,
+                    <span key="e" style={{ color: 'var(--text-tertiary)' }}>{l.equipment || '—'}</span>,
+                    <span key="c" style={{ fontFamily: 'var(--mono)' }}>{l.count}</span>,
+                    <span key="r" style={{ fontFamily: 'var(--mono)' }}>
+                      {l.rates.length ? `$${Math.min(...l.rates).toLocaleString()} – $${Math.max(...l.rates).toLocaleString()}` : '—'}
+                    </span>,
+                  ]} />
+                ))}
+              </div>
+            )}
+          </div>
+        )
       ) : (
         <div style={{ padding: '36px 56px 48px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '20px' }}>
@@ -162,9 +240,9 @@ export default function RateCardsPage() {
   );
 }
 
-const TRow = ({ header, cols }) => (
+const TRow = ({ header, cols, widths = '1.4fr 1fr 1fr 1fr' }) => (
   <div style={{
-    display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr',
+    display: 'grid', gridTemplateColumns: widths,
     padding: header ? '12px 22px' : '16px 22px',
     background: '#FFFFFF',
     borderTop: header ? 'none' : '1px solid var(--border-card)',
