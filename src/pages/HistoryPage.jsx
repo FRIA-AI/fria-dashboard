@@ -130,6 +130,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
                       validUntil: c.valid_until,
                       transitDays: c.transit_days,
                       quoteId: quote.id,
+                      returnTo: 'history',
                     })} style={{
                       height: '30px', padding: '0 12px', borderRadius: 'var(--radius-sm)',
                       background: 'var(--accent-primary)', color: '#FFFFFF', border: 'none',
