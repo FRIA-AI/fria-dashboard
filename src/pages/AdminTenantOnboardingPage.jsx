@@ -32,12 +32,37 @@ export default function AdminTenantOnboardingPage() {
   const [country, setCountry] = useState('MX');
   const [plan, setPlan] = useState('starter');
   const [users, setUsers] = useState([emptyUser()]);
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
   function updateUser(i, field, value) {
     setUsers(prev => prev.map((u, idx) => idx === i ? { ...u, [field]: value } : u));
+  }
+
+  function handleLogoSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setError('El logo debe ser PNG o JPG.');
+      return;
+    }
+    setError('');
+    setLogoFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setLogoPreview(reader.result);
+    reader.readAsDataURL(file);
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]); // quita el prefijo data:...;base64,
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
   async function handleSubmit(e) {
@@ -50,10 +75,16 @@ export default function AdminTenantOnboardingPage() {
     if (!session) { setSubmitting(false); return; }
 
     try {
+      let logoBase64 = null, logoContentType = null;
+      if (logoFile) {
+        logoBase64 = await fileToBase64(logoFile);
+        logoContentType = logoFile.type;
+      }
+
       const res = await fetch('/api/admin/create-tenant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ companyName, primaryEmail, country, plan, users }),
+        body: JSON.stringify({ companyName, primaryEmail, country, plan, users, logoBase64, logoContentType }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -61,6 +92,7 @@ export default function AdminTenantOnboardingPage() {
       } else {
         setResult(data);
         setCompanyName(''); setPrimaryEmail(''); setUsers([emptyUser()]);
+        setLogoFile(null); setLogoPreview(null);
       }
     } catch (e) {
       setError('No se pudo conectar con el servidor.');
@@ -108,6 +140,20 @@ export default function AdminTenantOnboardingPage() {
               <select value={plan} onChange={e => setPlan(e.target.value)} style={inputStyle}>
                 {PLANS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
+            </div>
+          </div>
+          <div>
+            <div style={labelStyle}>Logo del cliente (PNG o JPG) — se usa en sus PDF de cotización</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              {logoPreview && (
+                <img src={logoPreview} alt="Logo" style={{
+                  width: '48px', height: '48px', objectFit: 'contain', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-input)', background: '#FFFFFF', padding: '4px',
+                }} />
+              )}
+              <input type="file" accept="image/png,image/jpeg" onChange={handleLogoSelect} style={{
+                fontSize: '13px', color: 'var(--text-secondary)', fontFamily: 'var(--font)',
+              }} />
             </div>
           </div>
         </div>
@@ -189,6 +235,11 @@ export default function AdminTenantOnboardingPage() {
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
             Tenant creado: {result.tenant.company_name} ({result.tenant.slug})
           </div>
+          {result.logoError && (
+            <div style={{ fontSize: '13px', color: 'var(--alert-text)' }}>
+              ✗ Logo: no se pudo subir — {result.logoError}
+            </div>
+          )}
           {result.results.map((r, i) => (
             <div key={i} style={{ fontSize: '13px', color: r.success ? 'var(--success-text)' : 'var(--alert-text)' }}>
               {r.success ? '✓' : '✗'} {r.email} {!r.success && `— ${r.step}: ${r.error || 'error desconocido'}`}
