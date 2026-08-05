@@ -15,10 +15,18 @@ export const NAV = [
   { id: 'chat',      label: 'Chat',       roles: ['admin'] },
 ];
 
+// Pantallas restringidas por rol que NO viven en la barra de navegacion
+// principal (se acceden por otro camino, ej. el menu del avatar) -- se
+// revisan aparte para no mezclarlas con los botones visibles de arriba.
+const EXTRA_TAB_ROLES = {
+  settings: ['admin'], // Conectar Gmail -- solo el admin del tenant debe poder tocar la bandeja compartida
+};
+
 export function canAccessTab(role, tabId) {
   const item = NAV.find(n => n.id === tabId);
-  if (!item) return true; // pantallas fuera de la barra (settings, sell-quote, etc.) no se restringen aqui
-  return item.roles.includes(role);
+  if (item) return item.roles.includes(role);
+  if (EXTRA_TAB_ROLES[tabId]) return EXTRA_TAB_ROLES[tabId].includes(role);
+  return true; // pantallas sin restriccion por rol (sell-quote; admin-onboarding se controla aparte con isFriaStaff)
 }
 
 function FriaMark({ height = 22 }) {
@@ -118,18 +126,20 @@ export default function TopNav({ user, activeTab, setActiveTab, isFriaStaff }) {
             }}>
               {user.email}
             </div>
-            <button
-              onClick={() => { setActiveTab('settings'); setMenuOpen(false); }}
-              style={{
-                padding: '9px 12px', borderRadius: 'var(--radius-sm)', fontSize: '13px',
-                fontWeight: 500, color: 'var(--text-primary)', background: 'none', border: 'none',
-                cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font)',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-panel)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}
-            >
-              Configuración
-            </button>
+            {user.role === 'admin' && (
+              <button
+                onClick={() => { setActiveTab('settings'); setMenuOpen(false); }}
+                style={{
+                  padding: '9px 12px', borderRadius: 'var(--radius-sm)', fontSize: '13px',
+                  fontWeight: 500, color: 'var(--text-primary)', background: 'none', border: 'none',
+                  cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font)',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-panel)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                Configuración
+              </button>
+            )}
             {isFriaStaff && (
               <button
                 onClick={() => { setActiveTab('admin-onboarding'); setMenuOpen(false); }}
