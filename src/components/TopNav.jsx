@@ -1,15 +1,25 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-const NAV = [
-  { id: 'home',      label: 'Inicio',     adminOnly: false },
-  { id: 'rfq',       label: 'Pricing',    adminOnly: false },
-  { id: 'history',   label: 'Historial',  adminOnly: false },
-  { id: 'ratecards', label: 'Tarifarios', adminOnly: true },
-  { id: 'carriers',  label: 'Carriers',   adminOnly: true },
-  { id: 'metrics',   label: 'Métricas',   adminOnly: true },
-  { id: 'chat',      label: 'Chat',       adminOnly: true },
+// Matriz explicita de que rol ve que pantalla -- mas facil de leer y de
+// extender que un simple "adminOnly: true/false". Se exporta para que
+// App.jsx pueda usar la misma matriz como verificacion real, no solo para
+// ocultar el boton del menu.
+export const NAV = [
+  { id: 'home',      label: 'Inicio',     roles: ['admin', 'sales', 'pricing', 'readonly'] },
+  { id: 'rfq',       label: 'Pricing',    roles: ['admin', 'sales', 'pricing'] },
+  { id: 'history',   label: 'Historial',  roles: ['admin', 'sales', 'pricing'] },
+  { id: 'ratecards', label: 'Tarifarios', roles: ['admin', 'pricing'] },
+  { id: 'carriers',  label: 'Carriers',   roles: ['admin'] },
+  { id: 'metrics',   label: 'Métricas',   roles: ['admin', 'readonly'] },
+  { id: 'chat',      label: 'Chat',       roles: ['admin'] },
 ];
+
+export function canAccessTab(role, tabId) {
+  const item = NAV.find(n => n.id === tabId);
+  if (!item) return true; // pantallas fuera de la barra (settings, sell-quote, etc.) no se restringen aqui
+  return item.roles.includes(role);
+}
 
 function FriaMark({ height = 22 }) {
   const heights = [0.40, 0.65, 1.00, 0.80, 0.55];
@@ -44,7 +54,7 @@ export default function TopNav({ user, activeTab, setActiveTab, isFriaStaff }) {
     await supabase.auth.signOut();
   }
 
-  const visibleNav = NAV.filter(item => !item.adminOnly || user.role === 'admin');
+  const visibleNav = NAV.filter(item => item.roles.includes(user.role));
 
   return (
     <header style={{
