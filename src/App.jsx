@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import LoginPage from './pages/LoginPage';
 import SetPasswordPage from './pages/SetPasswordPage';
-import TopNav from './components/TopNav';
+import TopNav, { canAccessTab } from './components/TopNav';
 import HomePage from './pages/HomePage';
 import RFQPage from './pages/RFQPage';
 import HistoryPage from './pages/HistoryPage';
@@ -99,6 +99,15 @@ export default function App() {
 
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  // Verificacion real de permisos por rol -- no basta con esconder el boton
+  // del menu, si alguien llega a una pestana restringida por cualquier otro
+  // medio, se regresa a Inicio automaticamente.
+  useEffect(() => {
+    if (user && !canAccessTab(user.role, activeTab)) {
+      setActiveTab('home');
+    }
+  }, [user, activeTab]);
 
   if (!mounted) return null;
 
