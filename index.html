@@ -8,6 +8,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Supabase limpia el hash de la URL (#access_token=...&type=invite) en cuanto
+      // se inicializa el cliente, ANTES de que React llegue a revisarlo -- lo
+      // capturamos aqui, en HTML puro, antes de que se cargue cualquier modulo.
+      window.__FRIA_INITIAL_HASH__ = window.location.hash;
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
