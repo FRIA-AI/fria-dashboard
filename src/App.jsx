@@ -50,7 +50,7 @@ export default function App() {
     }
   }
 
-  const isAuthCallback = window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery');
+  const isAuthCallback = (window.__FRIA_INITIAL_HASH__ || '').includes('type=invite') || (window.__FRIA_INITIAL_HASH__ || '').includes('type=recovery');
 
   async function loadProfile(session) {
     if (!session) {
@@ -112,7 +112,7 @@ export default function App() {
   if (!mounted) return null;
 
   if (isAuthCallback) {
-    return <SetPasswordPage onDone={() => { window.location.hash = ''; }} />;
+    return <SetPasswordPage onDone={() => { window.__FRIA_INITIAL_HASH__ = ''; window.location.hash = ''; }} />;
   }
 
   if (!user) {
