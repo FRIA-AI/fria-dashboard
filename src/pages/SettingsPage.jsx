@@ -15,6 +15,7 @@ export default function SettingsPage() {
   const [email, setEmail] = useState('');
   const [connectedAt, setConnectedAt] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   async function loadStatus() {
     setStatus('loading');
@@ -153,6 +154,43 @@ export default function SettingsPage() {
         borderTop: '1px solid var(--border-card)', paddingTop: '20px',
       }}>
         Solo pedimos permiso para enviar y leer correos relacionados a RFQs — nunca tocamos el resto de tu bandeja.
+      </div>
+
+      <div>
+        <button onClick={() => setShowGuide(s => !s)} style={{
+          background: 'none', border: 'none', color: 'var(--accent-primary)', fontSize: '13px',
+          fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)', padding: 0,
+        }}>
+          {showGuide ? '▾ Ocultar guía paso a paso' : '▸ Ver guía paso a paso'}
+        </button>
+
+        {showGuide && (
+          <div style={{
+            marginTop: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-card)',
+            borderRadius: 'var(--radius-lg)', padding: '24px',
+          }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '14px' }}>
+              Cómo conectar tu Gmail
+            </div>
+            <ol style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {[
+                'Haz clic en "Conectar con Google" arriba.',
+                'Selecciona la cuenta de Gmail de la empresa (la que va a mandar y recibir las cotizaciones con los carriers).',
+                'Es normal ver una pantalla que dice "Google no verificó esta app" — es porque FRIA es una app nueva, no significa que algo esté mal. Haz clic en "Avanzado" y luego en "Ir a FRIA (no seguro)".',
+                'Google te va a pedir confirmar dos permisos (enviar correos y leer/organizar tu bandeja). Acepta ambos — sin esto FRIA no puede mandar ni leer respuestas de RFQs.',
+                'Te va a regresar automáticamente a esta pantalla, ahora mostrando "Conectado" con el correo y la fecha.',
+              ].map((step, i) => (
+                <li key={i} style={{ fontSize: '13px', color: 'var(--text-tertiary)', lineHeight: 1.6 }}>{step}</li>
+              ))}
+            </ol>
+            <div style={{
+              marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--border-card)',
+              fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6,
+            }}>
+              Si necesitas desconectar y volver a conectar (por ejemplo, para cambiar de cuenta), usa el botón "Desconectar" primero y repite estos pasos.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
