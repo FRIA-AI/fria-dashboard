@@ -1,6 +1,24 @@
 import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
+function FriaMark({ height = 24 }) {
+  const heights = [0.40, 0.65, 1.00, 0.80, 0.55];
+  const colors = ['#0A0F1F', '#2E5BA8', '#4D8EFF', '#7BA7EE', '#0A0F1F'];
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: `${height}px` }}>
+      {heights.map((h, i) => (
+        <div key={i} style={{ width: '6px', height: `${h * 100}%`, background: colors[i], borderRadius: '1px' }} />
+      ))}
+    </div>
+  );
+}
+
+const CARRIERS_PREVIEW = [
+  { name: 'ALCOSA', price: '$27,900', winner: true },
+  { name: 'Falcon Freight', price: '$29,650', winner: false },
+  { name: 'Trucka USA', price: '$31,020', winner: false },
+];
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,7 +35,7 @@ export default function LoginPage() {
     });
     setLoading(false);
     if (signInError) {
-      setError('Incorrect email or password');
+      setError('Correo o contraseña incorrectos.');
       return;
     }
     // No hace falta hacer nada mas aqui: App.jsx escucha el cambio de sesion
@@ -26,134 +44,124 @@ export default function LoginPage() {
 
   return (
     <div style={{
-      minHeight: '100vh', display: 'flex',
-      background: '#0A0F1F',
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'var(--bg-page)', padding: '32px', fontFamily: 'var(--font)',
     }}>
       <div style={{
-        width: '50%', display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', padding: '48px',
-        position: 'relative', overflow: 'hidden'
+        width: '100%', maxWidth: '1100px', minHeight: '620px', display: 'flex',
+        borderRadius: '14px', overflow: 'hidden', boxShadow: '0 30px 80px rgba(10,15,31,.18)',
       }}>
+        {/* Panel izquierdo — formulario */}
         <div style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: 'radial-gradient(ellipse at 30% 70%, rgba(77,142,255,0.14) 0%, transparent 60%)',
-          pointerEvents: 'none'
-        }} />
-        <div style={{ position: 'relative', width: '100%', maxWidth: '380px' }}>
-          <div style={{ marginBottom: '48px' }}>
-            <div style={{ fontSize: '30px', fontWeight: 'bold', color: '#EAF0FB', letterSpacing: '4px', marginBottom: '32px' }}>
-              FRIA
-            </div>
-            <h1 style={{ color: 'white', fontSize: '28px', fontWeight: '600', lineHeight: 1.2, marginBottom: '10px' }}>
-              Freight Rate<br />Intelligence Dashboard
-            </h1>
-            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '14px', lineHeight: 1.6 }}>
-              Sign in to request freight quotes and<br />access FRIA rate analysis.
-            </p>
+          width: '46%', background: 'var(--bg-card)', padding: '64px 56px',
+          display: 'flex', flexDirection: 'column', gap: '32px', justifyContent: 'center',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <FriaMark />
+            <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>FRIA</div>
           </div>
 
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '11px', fontWeight: '600', letterSpacing: '0.08em', marginBottom: '8px', textTransform: 'uppercase' }}>Email</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+              Freight Rate Intelligence Dashboard
+            </div>
+            <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+              Inicia sesión para cotizar en segundos.
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Correo</label>
               <input
                 type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                placeholder="you@company.com"
+                placeholder="tu@empresa.com"
                 style={{
-                  width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '8px', padding: '13px 16px', color: 'white', fontSize: '14px',
-                  outline: 'none', transition: 'border-color 150ms', fontFamily: 'inherit'
+                  height: '46px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
+                  border: '1px solid var(--border-input)', padding: '0 14px', fontSize: '14px',
+                  color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font)',
                 }}
-                onFocus={e => e.target.style.borderColor = 'rgba(77,142,255,0.7)'}
-                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
               />
             </div>
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '11px', fontWeight: '600', letterSpacing: '0.08em', marginBottom: '8px', textTransform: 'uppercase' }}>Password</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>Contraseña</label>
               <input
                 type="password" value={password} onChange={e => setPassword(e.target.value)} required
-                placeholder="••••••••"
+                placeholder="••••••••••"
                 style={{
-                  width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '8px', padding: '13px 16px', color: 'white', fontSize: '14px',
-                  outline: 'none', transition: 'border-color 150ms', fontFamily: 'inherit'
+                  height: '46px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
+                  border: '1px solid var(--border-input)', padding: '0 14px', fontSize: '14px',
+                  color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font)', letterSpacing: '.2em',
                 }}
-                onFocus={e => e.target.style.borderColor = 'rgba(77,142,255,0.7)'}
-                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
               />
             </div>
 
             {error && (
               <div style={{
-                background: 'rgba(77,142,255,0.15)', border: '1px solid rgba(77,142,255,0.3)',
-                borderRadius: '8px', padding: '10px 14px',
-                color: '#a8c8ff', fontSize: '13px', marginBottom: '16px'
-              }}>{error}</div>
+                background: 'var(--alert-bg)', border: '1px solid var(--alert-text)', borderRadius: 'var(--radius-md)',
+                padding: '10px 14px', color: 'var(--alert-text)', fontSize: '13px',
+              }}>
+                {error}
+              </div>
             )}
 
             <button type="submit" disabled={loading} style={{
-              width: '100%', background: '#4D8EFF', border: 'none',
-              borderRadius: '8px', padding: '14px', color: 'white',
-              fontSize: '15px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.75 : 1, transition: 'all 150ms', fontFamily: 'inherit',
-              letterSpacing: '0.01em'
+              height: '46px', borderRadius: 'var(--radius-md)', background: 'var(--accent-primary)',
+              border: 'none', color: '#FFFFFF', fontSize: '14px', fontWeight: 700,
+              cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.75 : 1, fontFamily: 'var(--font)',
             }}>
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? 'Iniciando sesión…' : 'Iniciar sesión'}
             </button>
           </form>
 
-          <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: '12px', marginTop: '36px', textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'center' }}>
             FRIA · friaai.com · {new Date().getFullYear()}
-          </p>
+          </div>
         </div>
-      </div>
 
-      <div style={{
-        width: '50%', background: '#f0f2f5', display: 'flex',
-        flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        padding: '48px', position: 'relative', overflow: 'hidden'
-      }}>
+        {/* Panel derecho — vista previa ilustrativa */}
         <div style={{
-          position: 'absolute', top: '40px', right: '40px', left: '40px',
-          background: 'white', borderRadius: '16px', padding: '24px',
-          boxShadow: '0 4px 24px rgba(10,15,31,0.1)', border: '1px solid rgba(10,15,31,0.08)'
+          width: '54%', background: 'var(--bg-panel)', padding: '56px',
+          display: 'flex', flexDirection: 'column', gap: '20px', justifyContent: 'center',
+          borderLeft: '1px solid var(--border-card)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }} />
-            <span style={{ fontSize: '12px', fontWeight: '600', color: '#0A0F1F', letterSpacing: '0.05em' }}>FRIA — LIVE ANALYSIS</span>
+          <div style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '.06em', color: 'var(--accent-primary)', textTransform: 'uppercase' }}>
+            FRIA — Análisis en vivo
           </div>
-          <div style={{ fontSize: '13px', color: '#5c6b8a', marginBottom: '16px' }}>Veracruz → CDMX · 40HC · 3 carriers evaluated</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {[
-              { name: 'Carrier A', price: 'MXN 18,500', medal: '🥇', color: '#f0fdf4', border: 'rgba(22,163,74,0.2)' },
-              { name: 'Carrier B',        price: 'MXN 21,000', medal: '🥈', color: '#f8f9fa', border: 'rgba(10,15,31,0.08)' },
-              { name: 'Carrier C',          price: 'MXN 23,400', medal: '🥉', color: '#f8f9fa', border: 'rgba(10,15,31,0.08)' },
-            ].map(c => (
-              <div key={c.name} style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                background: c.color, border: `1px solid ${c.border}`,
-                borderRadius: '8px', padding: '10px 14px'
-              }}>
-                <span style={{ fontSize: '14px' }}>{c.medal}</span>
-                <span style={{ fontSize: '13px', fontWeight: '500', color: '#0A0F1F', flex: 1 }}>{c.name}</span>
-                <span style={{ fontSize: '13px', fontWeight: '700', color: '#0A0F1F', fontFamily: 'DM Mono, monospace' }}>{c.price}</span>
-              </div>
-            ))}
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
+            padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>Veracruz → CDMX</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>40HC · 3 carriers evaluados</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {CARRIERS_PREVIEW.map(c => (
+                <div key={c.name} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '12px 14px', borderRadius: 'var(--radius-md)',
+                  background: c.winner ? 'var(--success-bg)' : 'var(--bg-panel)',
+                  border: c.winner ? '1px solid var(--success-text)' : 'none',
+                }}>
+                  <div style={{ fontSize: '14px', fontWeight: c.winner ? 600 : 400, color: c.winner ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
+                    {c.name}
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--mono)', fontSize: '15px', fontWeight: c.winner ? 700 : 400,
+                    color: c.winner ? 'var(--success-text)' : 'var(--text-tertiary)',
+                  }}>
+                    {c.price}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{ marginTop: '14px', padding: '10px 14px', background: 'rgba(10,15,31,0.04)', borderRadius: '8px' }}>
-            <span style={{ fontSize: '12px', color: '#5c6b8a' }}>Price spread: </span>
-            <span style={{ fontSize: '12px', fontWeight: '600', color: '#0A0F1F' }}>26.5%</span>
-            <span style={{ fontSize: '12px', color: '#5c6b8a' }}> · Analysis delivered by email</span>
+          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textAlign: 'center' }}>
+            Solicita cotizaciones · Compara carriers · Da seguimiento a tu equipo
           </div>
-        </div>
-
-        <div style={{ position: 'absolute', bottom: '40px', left: '40px', right: '40px' }}>
-          <p style={{ fontSize: '13px', color: '#9ba8bf', textAlign: 'center' }}>
-            Request quotes · Compare carriers · Track your team's activity
-          </p>
         </div>
       </div>
-
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');`}</style>
     </div>
   );
 }
