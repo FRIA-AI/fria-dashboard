@@ -12,6 +12,7 @@ import RateCardsPage from './pages/RateCardsPage';
 import CarriersPage from './pages/CarriersPage';
 import SettingsPage from './pages/SettingsPage';
 import SellQuotePage from './pages/SellQuotePage';
+import AdminTenantOnboardingPage from './pages/AdminTenantOnboardingPage';
 
 function initials(firstName, lastName) {
   const a = (firstName || '').trim()[0] || '';
@@ -29,10 +30,24 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(getInitialTab);
   const [mounted, setMounted] = useState(false);
   const [sellContext, setSellContext] = useState(null);
+  const [isFriaStaff, setIsFriaStaff] = useState(false);
 
   function goToSellQuote(context) {
     setSellContext(context);
     setActiveTab('sell-quote');
+  }
+
+  async function checkFriaStaff(session) {
+    if (!session) { setIsFriaStaff(false); return; }
+    try {
+      const res = await fetch('/api/admin/am-i-staff', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      setIsFriaStaff(!!data.isStaff);
+    } catch {
+      setIsFriaStaff(false);
+    }
   }
 
   const isAuthCallback = window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery');
@@ -72,10 +87,14 @@ export default function App() {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => loadProfile(data.session));
+    supabase.auth.getSession().then(({ data }) => {
+      loadProfile(data.session);
+      checkFriaStaff(data.session);
+    });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       loadProfile(session);
+      checkFriaStaff(session);
     });
 
     return () => listener.subscription.unsubscribe();
@@ -93,7 +112,7 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      <TopNav user={user} activeTab={activeTab} setActiveTab={setActiveTab} />
+      <TopNav user={user} activeTab={activeTab} setActiveTab={setActiveTab} isFriaStaff={isFriaStaff} />
       <main style={{ flex: 1, overflowY: activeTab === 'chat' ? 'hidden' : 'auto', background: 'var(--bg-page)' }}>
         {activeTab === 'home'      && <HomePage user={user} setActiveTab={setActiveTab} />}
         {activeTab === 'rfq'       && <RFQPage user={user} onSellQuote={goToSellQuote} />}
@@ -104,6 +123,7 @@ export default function App() {
         {activeTab === 'carriers'  && <CarriersPage user={user} />}
         {activeTab === 'settings'  && <SettingsPage user={user} />}
         {activeTab === 'sell-quote' && <SellQuotePage user={user} context={sellContext} setActiveTab={setActiveTab} />}
+        {activeTab === 'admin-onboarding' && isFriaStaff && <AdminTenantOnboardingPage />}
       </main>
     </div>
   );
