@@ -26,7 +26,7 @@ function FriaMark({ height = 22 }) {
   );
 }
 
-export default function TopNav({ user, activeTab, setActiveTab }) {
+export default function TopNav({ user, activeTab, setActiveTab, isFriaStaff }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -120,6 +120,20 @@ export default function TopNav({ user, activeTab, setActiveTab }) {
             >
               Configuración
             </button>
+            {isFriaStaff && (
+              <button
+                onClick={() => { setActiveTab('admin-onboarding'); setMenuOpen(false); }}
+                style={{
+                  padding: '9px 12px', borderRadius: 'var(--radius-sm)', fontSize: '13px',
+                  fontWeight: 500, color: 'var(--text-primary)', background: 'none', border: 'none',
+                  cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font)',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-panel)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                Onboarding FRIA
+              </button>
+            )}
             <button
               onClick={handleLogout}
               style={{
