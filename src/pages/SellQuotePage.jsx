@@ -6,6 +6,34 @@ function todayLabel() {
   return new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+async function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+async function loadFonts(doc) {
+  const fonts = [
+    ['/fonts/Inter-Regular.ttf', 'Inter', 'normal'],
+    ['/fonts/Inter-Bold.ttf', 'Inter', 'bold'],
+    ['/fonts/Inter-ExtraBold.ttf', 'InterExtraBold', 'bold'],
+    ['/fonts/JetBrainsMono-Regular.ttf', 'JetBrainsMono', 'normal'],
+    ['/fonts/JetBrainsMono-Bold.ttf', 'JetBrainsMono', 'bold'],
+  ];
+  for (const [url, name, style] of fonts) {
+    const res = await fetch(url);
+    const buffer = await res.arrayBuffer();
+    const b64 = await arrayBufferToBase64(buffer);
+    const fileName = url.split('/').pop();
+    doc.addFileToVFS(fileName, b64);
+    doc.addFont(fileName, name, style);
+  }
+}
+
 // NOTA: el logo del cliente va ligado al tenant y se define en el flujo de
 // onboarding (todavia no construido) -- cuando exista, se agrega aqui como
 // una imagen mas dentro del header, no antes.
@@ -162,6 +190,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
 
   async function handleDownload() {
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    await loadFonts(doc);
 
     // El diseno original de Claude Design se construyo a 700px de ancho para
     // una pagina carta de 612pt -- escalamos cada medida con este mismo factor
@@ -210,28 +239,28 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
 
     // Header: simbolo + wordmark a la izquierda, fecha/folio a la derecha
     const markEndX = drawLogoMark(L, y - px(2), 22);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('InterExtraBold', 'bold');
     doc.setFontSize(px(20));
     doc.setTextColor(10, 15, 31);
     doc.text('FRIA', markEndX + px(10), y - px(6));
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('Inter', 'normal');
     doc.setFontSize(px(9));
     doc.setTextColor(92, 107, 138);
     doc.text('FREIGHT RATE INTELLIGENCE', markEndX + px(10), y + px(6));
 
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Inter', 'bold');
     doc.setFontSize(px(9));
     doc.setTextColor(92, 107, 138);
     doc.text('FECHA', R, y - px(14), { align: 'right' });
-    doc.setFont('courier', 'normal');
+    doc.setFont('JetBrainsMono', 'normal');
     doc.setFontSize(px(12));
     doc.setTextColor(10, 15, 31);
     doc.text(todayLabel(), R, y - px(2), { align: 'right' });
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Inter', 'bold');
     doc.setFontSize(px(9));
     doc.setTextColor(92, 107, 138);
     doc.text('FOLIO', R, y + px(11), { align: 'right' });
-    doc.setFont('courier', 'normal');
+    doc.setFont('JetBrainsMono', 'normal');
     doc.setFontSize(px(11));
     doc.setTextColor(10, 15, 31);
     doc.text(String(context.quoteNumber || '—'), R, y + px(23), { align: 'right' });
@@ -241,19 +270,19 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.setLineWidth(0.75);
     doc.line(L, y - px(24), R, y - px(24));
 
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Inter', 'bold');
     doc.setFontSize(px(24));
     doc.setTextColor(10, 15, 31);
     doc.text('Cotización de flete', L, y);
 
     // Cliente / Vendedor
     y += px(22 + 4);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Inter', 'bold');
     doc.setFontSize(px(10));
     doc.setTextColor(92, 107, 138);
     doc.text('CLIENTE', L, y);
     doc.text('VENDEDOR', L + W / 2, y);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Inter', 'bold');
     doc.setFontSize(px(15));
     doc.setTextColor(10, 15, 31);
     doc.text(cliente || '—', L, y + px(15));
@@ -267,7 +296,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.roundedRect(L, y, W, routeCardH, px(10), px(10), 'FD');
     const midY = y + routeCardH / 2 + px(5);
 
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Inter', 'bold');
     doc.setFontSize(px(19));
     doc.setTextColor(10, 15, 31);
     const originText = String(context.origin || '—');
@@ -286,7 +315,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.text(String(context.destination || '—'), arrowX + px(24), midY);
 
     const equipLabel = (context.equipment || '—').replace(/_/g, ' ').toUpperCase();
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Inter', 'bold');
     doc.setFontSize(px(11));
     doc.setTextColor(46, 91, 168);
     const equipW = doc.getTextWidth(equipLabel) + px(24);
@@ -301,17 +330,17 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.setDrawColor(77, 142, 255);
     doc.setLineWidth(1.3);
     doc.roundedRect(L, y, W, rateCardH, px(12), px(12), 'D');
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Inter', 'bold');
     doc.setFontSize(px(10));
     doc.setTextColor(46, 91, 168);
     doc.text('TARIFA COTIZADA', L + px(24), y + px(22));
-    doc.setFont('courier', 'bold');
+    doc.setFont('JetBrainsMono', 'bold');
     doc.setFontSize(px(34));
     doc.setTextColor(10, 15, 31);
     const rateText = `$${finalRate.toLocaleString()}`;
     doc.text(rateText, L + px(24), y + px(50));
     const rateW = doc.getTextWidth(rateText);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Inter', 'bold');
     doc.setFontSize(px(15));
     doc.setTextColor(92, 107, 138);
     doc.text(currency, L + px(24) + rateW + px(8), y + px(50));
@@ -329,11 +358,11 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     ];
     metaCols.forEach(([label, value], i) => {
       const cx = L + i * colW;
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('Inter', 'bold');
       doc.setFontSize(px(9.5));
       doc.setTextColor(92, 107, 138);
       doc.text(label, cx, y);
-      doc.setFont('courier', 'normal');
+      doc.setFont('JetBrainsMono', 'normal');
       doc.setFontSize(px(12));
       doc.setTextColor(10, 15, 31);
       const lines = doc.splitTextToSize(value, colW - px(12));
@@ -345,7 +374,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.setDrawColor(230, 234, 242);
     doc.line(L, y, R, y);
     y += px(18);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Inter', 'bold');
     doc.setFontSize(px(10));
     doc.setTextColor(10, 15, 31);
     doc.text('CONDICIONES GENERALES', L, y);
@@ -357,7 +386,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     const leftItems = CONDICIONES_GENERALES.slice(0, half);
     const rightItems = CONDICIONES_GENERALES.slice(half);
 
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('Inter', 'normal');
     doc.setFontSize(px(7.6));
     doc.setTextColor(58, 69, 96);
 
@@ -382,11 +411,11 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.setDrawColor(230, 234, 242);
     doc.line(L, footerLineY, R, footerLineY);
     const footerTextY = footerLineY + px(14);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('Inter', 'normal');
     doc.setFontSize(px(9));
     doc.setTextColor(136, 148, 179);
     doc.text('FRIA · cotizaciones@friaai.com', L, footerTextY);
-    doc.setFont('courier', 'normal');
+    doc.setFont('JetBrainsMono', 'normal');
     doc.text('Página 1 de 1', R, footerTextY, { align: 'right' });
 
     doc.save(`Cotizacion_${context.quoteNumber || 'FRIA'}.pdf`);
