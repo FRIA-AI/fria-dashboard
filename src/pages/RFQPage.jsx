@@ -10,18 +10,6 @@ const EXAMPLES = [
   'Guadalajara a Chicago, reefer, 3 unidades',
 ];
 
-function parseLaneParts(text) {
-  const patterns = [
-    /(?:de|from)\s+([\w\s]+?)\s+(?:a|to)\s+([\w\s]+?)(?:\s*,|\s*$)/i,
-    /([\w\s]+?)\s+(?:a|to)\s+([\w\s]+?)(?:\s+en|\s+,|\s*$)/i,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m) return { origin: m[1].trim(), destination: m[2].trim() };
-  }
-  return null;
-}
-
 function timeAgo(iso) {
   const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (mins < 60) return `hace ${mins} min`;
@@ -31,54 +19,74 @@ function timeAgo(iso) {
   return `hace ${days} días`;
 }
 
-// Comparativa de referencia -- NO son respuestas en vivo de carriers, son
-// datos ya guardados en Supabase (tarifarios subidos, o cotizaciones reales
-// anteriores en la misma ruta). Se busca por coincidencia parcial de ciudad
-// (ILIKE), no hay normalizacion geografica todavia -- limitacion conocida.
-async function fetchReferenceComparison(origin, destination) {
-  if (!origin || !destination) return [];
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
+// Espera a que n8n termine de crear la fila en `quotes` (INSERT Quote1) con
+// los campos ya normalizados por el LLM (origin_city/destination_city/
+// equipment_type) -- normalmente ya existe para cuando el webhook responde,
+// pero se reintenta una vez por si acaso.
+async function fetchNormalizedQuote(rfqId) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data } = await supabase
+      .from('quotes')
+      .select('origin_city, destination_city, equipment_type')
+      .eq('quote_number', rfqId)
+      .maybeSingle();
+    if (data) return data;
+    await sleep(1500);
+  }
+  return null;
+}
+
+// Reproduce EXACTAMENTE la logica de SR1 (Historical Rates) y SR2
+// (Historical Quotes) del workflow real "Envio RFQ" -- mismo match de
+// equipo (enum exacto), misma vigencia, misma ventana de 12 meses, mismo
+// match bidireccional de ciudad. No es una version aproximada.
+async function fetchComparison(originCity, destinationCity, equipmentType) {
+  const today = new Date().toISOString().slice(0, 10);
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+  // SR1 - Historical Rates: tarifarios vigentes, match bidireccional
   const { data: rateCardsData } = await supabase
     .from('rate_cards')
     .select('carrier_id, base_rate, valid_until')
-    .ilike('origin_city', `%${origin}%`)
-    .ilike('destination_city', `%${destination}%`)
-    .eq('is_active', true);
+    .eq('equipment_type', equipmentType)
+    .eq('is_active', true)
+    .or(`valid_until.is.null,valid_until.gte.${today}`)
+    .or(`origin_city.ilike.%${originCity}%,destination_city.ilike.%${destinationCity}%,origin_city.ilike.%${destinationCity}%,destination_city.ilike.%${originCity}%`)
+    .order('base_rate', { ascending: true })
+    .limit(20);
 
-  const { data: matchingQuotes } = await supabase
+  // SR2 - Historical Quotes: cotizaciones vendidas en esta ruta/equipo, ultimos 12 meses
+  const { data: historicalQuotes } = await supabase
     .from('quotes')
-    .select('id')
-    .ilike('origin_city', `%${origin}%`)
-    .ilike('destination_city', `%${destination}%`)
-    .limit(30);
+    .select('sell_price, sell_currency, created_at, selected_rfq_id')
+    .eq('equipment_type', equipmentType)
+    .ilike('origin_city', `%${originCity}%`)
+    .ilike('destination_city', `%${destinationCity}%`)
+    .gte('created_at', twelveMonthsAgo.toISOString())
+    .not('sell_price', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(20);
 
-  let historicalRfqs = [];
-  if (matchingQuotes && matchingQuotes.length) {
-    const quoteIds = matchingQuotes.map(q => q.id);
-    const { data: rfqData } = await supabase
+  // Resolver el carrier ganador de cada cotizacion vendida (selected_rfq_id -> quote_rfqs)
+  const rfqIds = (historicalQuotes || []).map(q => q.selected_rfq_id).filter(Boolean);
+  let carrierByRfqId = {};
+  if (rfqIds.length) {
+    const { data: winningRfqs } = await supabase
       .from('quote_rfqs')
-      .select('carrier_id, quoted_rate, responded_at')
-      .in('quote_id', quoteIds)
-      .eq('status', 'responded')
-      .order('responded_at', { ascending: false });
-    historicalRfqs = rfqData || [];
+      .select('id, carrier_id')
+      .in('id', rfqIds);
+    (winningRfqs || []).forEach(r => { carrierByRfqId[r.id] = r.carrier_id; });
   }
 
-  // Cotizacion mas reciente por carrier
-  const latestByCarrier = {};
-  historicalRfqs.forEach(r => {
-    if (!r.quoted_rate) return;
-    if (!latestByCarrier[r.carrier_id]) latestByCarrier[r.carrier_id] = r;
-  });
-
-  const rateCardByCarrier = {};
-  (rateCardsData || []).forEach(r => {
-    if (!rateCardByCarrier[r.carrier_id]) rateCardByCarrier[r.carrier_id] = r;
-  });
-
-  // Si un carrier tiene las dos fuentes, gana la cotizacion real anterior --
-  // es mas confiable que un tarifario estatico que puede estar desactualizado.
-  const allCarrierIds = new Set([...Object.keys(latestByCarrier), ...Object.keys(rateCardByCarrier)]);
+  const allCarrierIds = new Set([
+    ...(rateCardsData || []).map(r => r.carrier_id),
+    ...Object.values(carrierByRfqId),
+  ]);
   if (allCarrierIds.size === 0) return [];
 
   const { data: carriersData } = await supabase
@@ -88,24 +96,23 @@ async function fetchReferenceComparison(origin, destination) {
   const namesById = {};
   (carriersData || []).forEach(c => { namesById[c.id] = c.name; });
 
-  const combined = [...allCarrierIds].map(carrierId => {
-    const historical = latestByCarrier[carrierId];
-    const rateCard = rateCardByCarrier[carrierId];
-    if (historical) {
-      return {
-        carrierId, name: namesById[carrierId] || 'Carrier', price: Number(historical.quoted_rate),
-        source: 'cotizacion_anterior',
-        detail: `Cotización anterior · ${timeAgo(historical.responded_at)}`,
-      };
-    }
-    return {
-      carrierId, name: namesById[carrierId] || 'Carrier', price: Number(rateCard.base_rate),
-      source: 'tarifario',
-      detail: rateCard.valid_until ? `Tarifario · vigente hasta ${rateCard.valid_until}` : 'Tarifario de referencia',
-    };
-  });
+  const fromRateCards = (rateCardsData || []).map(r => ({
+    name: namesById[r.carrier_id] || 'Carrier',
+    price: Number(r.base_rate),
+    source: 'tarifario',
+    detail: r.valid_until ? `Tarifario · vigente hasta ${r.valid_until}` : 'Tarifario de referencia',
+  }));
 
-  return combined.sort((a, b) => a.price - b.price);
+  const fromHistorical = (historicalQuotes || [])
+    .filter(q => carrierByRfqId[q.selected_rfq_id])
+    .map(q => ({
+      name: namesById[carrierByRfqId[q.selected_rfq_id]] || 'Carrier',
+      price: Number(q.sell_price),
+      source: 'cotizacion_anterior',
+      detail: `Cotización anterior · ${timeAgo(q.created_at)}`,
+    }));
+
+  return [...fromRateCards, ...fromHistorical].sort((a, b) => a.price - b.price);
 }
 
 export default function RFQPage({ user, onSellQuote }) {
@@ -126,8 +133,6 @@ export default function RFQPage({ user, onSellQuote }) {
     const timestamp = now.toISOString().slice(0, 19).replace(/[-T:]/g, '');
     const suffix = user.id.slice(0, 4).toUpperCase();
     const rfqId = `FRIA-${timestamp}-${suffix}`;
-    const laneParts = parseLaneParts(message);
-    const lane = laneParts ? `${laneParts.origin} → ${laneParts.destination}` : null;
 
     const payload = {
       Body: message,
@@ -140,27 +145,27 @@ export default function RFQPage({ user, onSellQuote }) {
     };
 
     try {
-      // El envio real del RFQ (correos a carriers) y la busqueda de
-      // referencia en Supabase corren en paralelo -- no hace falta esperar
-      // uno para tener el otro.
-      const [webhookData, reference] = await Promise.all([
-        fetch(N8N_WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        }).then(async res => {
-          const contentType = res.headers.get('content-type') || '';
-          return contentType.includes('application/json') ? res.json() : null;
-        }).catch(() => null),
-        laneParts ? fetchReferenceComparison(laneParts.origin, laneParts.destination) : Promise.resolve([]),
-      ]);
+      await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => null);
+
+      // Una vez que n8n termino (el webhook ya normalizo origen/destino/equipo
+      // con el mismo LLM que usa para el correo), leemos esa fila real y
+      // corremos la misma comparativa que arma Basic LLM Chain4.
+      const normalized = await fetchNormalizedQuote(rfqId);
+      const lane = normalized ? `${normalized.origin_city} → ${normalized.destination_city}` : null;
+      const comparison = normalized
+        ? await fetchComparison(normalized.origin_city, normalized.destination_city, normalized.equipment_type)
+        : [];
 
       saveRFQ({
         id: rfqId, userName: user.name, userId: user.id, message, lane,
-        timestamp: new Date().toISOString(), status: 'sent', hasAnalysis: !!webhookData,
+        timestamp: new Date().toISOString(), status: 'sent', hasAnalysis: comparison.length > 0,
       });
 
-      setResult({ rfqId, data: webhookData, lane, message, reference });
+      setResult({ rfqId, lane, message, comparison, normalized });
       setStatus('success');
       setMessage('');
     } catch (err) {
@@ -241,13 +246,8 @@ const SOURCE_BADGE = {
 };
 
 function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
-  const liveCarriers = result.data?.carriers || result.data?.analysis?.carriers || [];
-  const sorted = [...liveCarriers].sort((a, b) => a.price - b.price);
-  const reference = result.reference || [];
-
-  // Para "Armar cotizacion de venta": prioriza un carrier en vivo si existe,
-  // si no, el mejor de la referencia (dejando claro que es referencia, no viva).
-  const bestForSale = sorted[0] || reference[0];
+  const comparison = result.comparison || [];
+  const winner = comparison[0];
 
   return (
     <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
@@ -263,17 +263,18 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
         </div>
       </div>
 
-      {sorted.length === 0 ? (
+      {comparison.length === 0 ? (
         <div style={{
           background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
           padding: '20px 22px', textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)',
         }}>
-          RFQ enviado a los carriers — el análisis con respuestas reales llegará a <strong>{userEmail}</strong> conforme respondan.
+          Sin tarifarios ni cotizaciones anteriores en esta ruta. RFQ enviado a los carriers en vivo — el análisis llegará a <strong>{userEmail}</strong> conforme respondan.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {sorted.map((c, i) => {
-            const isWinner = i === 0 && c.price;
+          {comparison.map((c, i) => {
+            const isWinner = i === 0;
+            const badge = SOURCE_BADGE[c.source];
             return (
               <div key={i} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -282,48 +283,10 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
                 border: `1px solid ${isWinner ? 'var(--success-text)' : 'var(--border-card)'}`,
               }}>
                 <div>
-                  <div style={{ fontSize: '15px', fontWeight: isWinner ? 700 : 600, color: 'var(--text-primary)' }}>
-                    {c.name}
-                  </div>
-                  {isWinner && (
-                    <div style={{ fontSize: '12px', color: 'var(--success-text)', fontWeight: 600, marginTop: '2px' }}>
-                      Recomendado · mejor tarifa disponible
-                    </div>
-                  )}
-                  {c.note && !isWinner && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', fontStyle: 'italic' }}>
-                      {c.note}
-                    </div>
-                  )}
-                </div>
-                <div style={{
-                  fontFamily: 'var(--mono)', fontSize: '19px', fontWeight: 700,
-                  color: isWinner ? 'var(--success-text)' : 'var(--text-tertiary)',
-                }}>
-                  {c.price ? `${c.currency || '$'}${c.price.toLocaleString()}` : '—'}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {reference.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-            Referencia mientras llegan respuestas reales
-          </div>
-          {reference.map((c, i) => {
-            const badge = SOURCE_BADGE[c.source];
-            return (
-              <div key={i} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '14px 22px', borderRadius: 'var(--radius-lg)',
-                background: 'var(--bg-panel)', border: '1px solid var(--border-card)',
-              }}>
-                <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{c.name}</span>
+                    <span style={{ fontSize: '15px', fontWeight: isWinner ? 700 : 600, color: 'var(--text-primary)' }}>
+                      {c.name}
+                    </span>
                     <span style={{
                       padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700,
                       background: badge.bg, color: badge.color,
@@ -331,32 +294,43 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
                       {badge.label}
                     </span>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{c.detail}</div>
+                  <div style={{
+                    fontSize: '12px', marginTop: '2px',
+                    color: isWinner ? 'var(--success-text)' : 'var(--text-secondary)',
+                    fontWeight: isWinner ? 600 : 400,
+                  }}>
+                    {isWinner ? 'Mejor referencia disponible · ' : ''}{c.detail}
+                  </div>
                 </div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: '16px', fontWeight: 700, color: 'var(--text-tertiary)' }}>
+                <div style={{
+                  fontFamily: 'var(--mono)', fontSize: '19px', fontWeight: 700,
+                  color: isWinner ? 'var(--success-text)' : 'var(--text-tertiary)',
+                }}>
                   ${c.price.toLocaleString()}
                 </div>
               </div>
             );
           })}
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center' }}>
+            Referencia de tarifarios y cotizaciones anteriores — el RFQ en vivo sigue en curso, el análisis con respuestas reales llegará a tu correo.
+          </div>
         </div>
       )}
 
       <div style={{ display: 'flex', gap: '12px' }}>
         <button
-          disabled={!bestForSale}
-          title={bestForSale ? '' : 'Disponible cuando haya al menos una cotización o referencia'}
+          disabled={!winner}
+          title={winner ? '' : 'Disponible cuando haya al menos una referencia'}
           onClick={() => {
-            if (!bestForSale || !onSellQuote) return;
-            const [origin, destination] = (result.lane || ' → ').split(' → ');
+            if (!winner || !onSellQuote) return;
             onSellQuote({
               quoteNumber: result.rfqId,
-              origin: origin || '—',
-              destination: destination || '—',
-              equipment: null,
-              carrierName: bestForSale.name,
-              baseRate: bestForSale.price || 0,
-              currency: bestForSale.currency || 'MXN',
+              origin: result.normalized?.origin_city || '—',
+              destination: result.normalized?.destination_city || '—',
+              equipment: result.normalized?.equipment_type || null,
+              carrierName: winner.name,
+              baseRate: winner.price || 0,
+              currency: 'MXN',
               validUntil: null,
               transitDays: null,
               quoteId: null,
@@ -365,10 +339,10 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
           }}
           style={{
             height: '46px', padding: '0 26px', borderRadius: 'var(--radius-md)',
-            background: bestForSale ? 'var(--accent-primary)' : 'var(--border-input)',
-            color: bestForSale ? '#FFFFFF' : 'var(--text-secondary)',
+            background: winner ? 'var(--accent-primary)' : 'var(--border-input)',
+            color: winner ? '#FFFFFF' : 'var(--text-secondary)',
             border: 'none', fontSize: '14px', fontWeight: 700,
-            cursor: bestForSale ? 'pointer' : 'not-allowed', fontFamily: 'var(--font)',
+            cursor: winner ? 'pointer' : 'not-allowed', fontFamily: 'var(--font)',
           }}
         >
           Armar cotización de venta →
