@@ -55,14 +55,15 @@ async function fetchComparison(quoteId, originCity, destinationCity, equipmentTy
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
-  // Tarifarios vigentes en esta ruta/equipo
+  // Tarifarios vigentes en esta ruta/equipo -- match bidireccional AGRUPADO
+  // EN PARES (origen+destino juntos), no 4 condiciones sueltas.
   const { data: rateCardsData, error: rateCardsError } = await supabase
     .from('rate_cards')
     .select('carrier_id, base_rate, valid_until')
     .eq('equipment_type', equipmentType)
     .eq('is_active', true)
     .or(`valid_until.is.null,valid_until.gte.${today}`)
-    .or(`origin_city.ilike.%${originCity}%,destination_city.ilike.%${destinationCity}%,origin_city.ilike.%${destinationCity}%,destination_city.ilike.%${originCity}%`)
+    .or(`and(origin_city.ilike.%${originCity}%,destination_city.ilike.%${destinationCity}%),and(origin_city.ilike.%${destinationCity}%,destination_city.ilike.%${originCity}%)`)
     .limit(50);
   if (rateCardsError) console.error('[FRIA] Error en rate_cards:', rateCardsError);
   console.log('[FRIA] rate_cards encontrados:', rateCardsData);
