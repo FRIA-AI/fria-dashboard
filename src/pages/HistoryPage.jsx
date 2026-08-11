@@ -31,7 +31,7 @@ function timeAgo(iso) {
 // Definidas ANTES de usarse, como const -- no dependemos de hoisting de function declarations.
 const HistorialRow = ({ header, cols }) => (
   <div style={{
-    display: 'grid', gridTemplateColumns: '110px 1fr 150px 110px 100px 36px',
+    display: 'grid', gridTemplateColumns: '165px 1.3fr 110px 140px 100px 90px 24px',
     padding: header ? '12px 22px' : '16px 22px',
     background: '#FFFFFF',
     borderTop: header ? 'none' : '1px solid var(--border-card)',
@@ -232,14 +232,16 @@ export default function HistoryPage({ user, onSellQuote }) {
         </div>
       ) : (
         <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
-          <HistorialRow header cols={['RFQ ID', 'Ruta', 'Estado', 'Monto', 'Fecha', '']} />
+          <HistorialRow header cols={['RFQ ID', 'Ruta', 'Equipo', 'Estado', 'Monto', 'Fecha', '']} />
           {filtered.map(q => {
             const st = STATUS_MAP[q.status] || STATUS_MAP.pending;
+            const equipmentLabel = (q.equipment_type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
             return (
               <div key={q.id} onClick={() => setSelected(q)} style={{ cursor: 'pointer' }}>
                 <HistorialRow cols={[
                   <span key="id" style={{ fontFamily: 'var(--mono)' }}>{q.quote_number}</span>,
                   <span key="lane">{q.origin_city} → {q.destination_city}</span>,
+                  <span key="equip" style={{ color: 'var(--text-secondary)' }}>{equipmentLabel || '—'}</span>,
                   <span key="status" style={{
                     padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600,
                     background: st.bg, color: st.color,
