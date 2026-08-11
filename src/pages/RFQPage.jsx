@@ -25,14 +25,15 @@ function sleep(ms) {
 
 // Espera a que n8n termine de crear la fila en `quotes` (INSERT Quote1) con
 // los campos ya normalizados por el LLM (origin_city/destination_city/
-// equipment_type). El flujo real de n8n hace varias llamadas a IA y manda
-// correos reales por cada carrier antes de terminar -- puede tardar bastante
-// mas que unos segundos, por eso reintentamos varias veces con paciencia.
+// equipment_type), y de mandar los RFQs reales a los carriers relevantes
+// (crea una fila en quote_rfqs por cada uno). El flujo real de n8n hace
+// varias llamadas a IA y manda correos reales antes de terminar -- puede
+// tardar bastante mas que unos segundos, por eso reintentamos con paciencia.
 async function fetchNormalizedQuote(rfqId) {
   for (let attempt = 0; attempt < 6; attempt++) {
     const { data, error } = await supabase
       .from('quotes')
-      .select('origin_city, destination_city, equipment_type')
+      .select('id, origin_city, destination_city, equipment_type')
       .eq('quote_number', rfqId)
       .maybeSingle();
     if (error) console.error('[FRIA] Error buscando quotes por quote_number:', error);
@@ -44,45 +45,61 @@ async function fetchNormalizedQuote(rfqId) {
   return null;
 }
 
-// Reproduce EXACTAMENTE la logica de SR1 (Historical Rates) y SR2
-// (Historical Quotes) del workflow real "Envio RFQ" -- mismo match de
-// equipo (enum exacto), misma vigencia, misma ventana de 12 meses, mismo
-// match bidireccional de ciudad. No es una version aproximada.
-async function fetchComparison(originCity, destinationCity, equipmentType) {
+// Los carriers "relevantes para esta ruta" son, literalmente, a quienes n8n
+// ya decidio contactar (una fila en quote_rfqs por cada uno, creada por SR3 -
+// Carriers for RFQ). Para CADA uno de esos carriers -- no solo los que ya
+// tienen precio -- se busca primero tarifario, si no hay se busca cotizacion
+// anterior vigente (ultimos 12 meses), y si tampoco hay, se muestra sin
+// precio con la aclaracion de que se solicito al carrier.
+async function fetchComparison(quoteId, originCity, destinationCity, equipmentType) {
+  console.log('[FRIA] Buscando comparativa para:', { quoteId, originCity, destinationCity, equipmentType });
+
+  // Carriers realmente contactados para ESTA cotizacion
+  const { data: contactedRfqs, error: contactedError } = await supabase
+    .from('quote_rfqs')
+    .select('carrier_id')
+    .eq('quote_id', quoteId);
+  if (contactedError) console.error('[FRIA] Error obteniendo carriers contactados:', contactedError);
+  const relevantCarrierIds = [...new Set((contactedRfqs || []).map(r => r.carrier_id).filter(Boolean))];
+  console.log('[FRIA] Carriers contactados para esta ruta:', relevantCarrierIds);
+
+  if (relevantCarrierIds.length === 0) {
+    console.log('[FRIA] Ningun carrier fue contactado para esta ruta -- comparativa vacia.');
+    return [];
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
-  console.log('[FRIA] Buscando comparativa para:', { originCity, destinationCity, equipmentType });
-
-  // SR1 - Historical Rates: tarifarios vigentes, match bidireccional
+  // Tarifarios vigentes de esos carriers en esta ruta/equipo
   const { data: rateCardsData, error: rateCardsError } = await supabase
     .from('rate_cards')
     .select('carrier_id, base_rate, valid_until')
+    .in('carrier_id', relevantCarrierIds)
     .eq('equipment_type', equipmentType)
     .eq('is_active', true)
     .or(`valid_until.is.null,valid_until.gte.${today}`)
-    .or(`origin_city.ilike.%${originCity}%,destination_city.ilike.%${destinationCity}%,origin_city.ilike.%${destinationCity}%,destination_city.ilike.%${originCity}%`)
-    .order('base_rate', { ascending: true })
-    .limit(20);
+    .or(`origin_city.ilike.%${originCity}%,destination_city.ilike.%${destinationCity}%,origin_city.ilike.%${destinationCity}%,destination_city.ilike.%${originCity}%`);
   if (rateCardsError) console.error('[FRIA] Error en rate_cards:', rateCardsError);
   console.log('[FRIA] rate_cards encontrados:', rateCardsData);
 
-  // SR2 - Historical Quotes: cotizaciones vendidas en esta ruta/equipo, ultimos 12 meses
+  // Cotizaciones vendidas anteriores en esta ruta/equipo, ultimos 12 meses
+  // (excluyendo la cotizacion recien creada, que todavia no tiene venta)
   const { data: historicalQuotes, error: historicalError } = await supabase
     .from('quotes')
-    .select('sell_price, sell_currency, created_at, selected_rfq_id')
+    .select('id, sell_price, sell_currency, created_at, selected_rfq_id')
+    .neq('id', quoteId)
     .eq('equipment_type', equipmentType)
     .ilike('origin_city', `%${originCity}%`)
     .ilike('destination_city', `%${destinationCity}%`)
     .gte('created_at', twelveMonthsAgo.toISOString())
     .not('sell_price', 'is', null)
     .order('created_at', { ascending: false })
-    .limit(20);
+    .limit(50);
   if (historicalError) console.error('[FRIA] Error en quotes historicos:', historicalError);
   console.log('[FRIA] cotizaciones vendidas encontradas:', historicalQuotes);
 
-  // Resolver el carrier ganador de cada cotizacion vendida (selected_rfq_id -> quote_rfqs)
   const rfqIds = (historicalQuotes || []).map(q => q.selected_rfq_id).filter(Boolean);
   let carrierByRfqId = {};
   if (rfqIds.length) {
@@ -94,41 +111,69 @@ async function fetchComparison(originCity, destinationCity, equipmentType) {
     (winningRfqs || []).forEach(r => { carrierByRfqId[r.id] = r.carrier_id; });
   }
 
-  const allCarrierIds = new Set([
-    ...(rateCardsData || []).map(r => r.carrier_id),
-    ...Object.values(carrierByRfqId),
-  ]);
-  if (allCarrierIds.size === 0) {
-    console.log('[FRIA] Sin carriers en ninguna de las dos fuentes -- comparativa vacia.');
-    return [];
-  }
-
   const { data: carriersData, error: carriersError } = await supabase
     .from('carriers')
     .select('id, name')
-    .in('id', [...allCarrierIds]);
+    .in('id', relevantCarrierIds);
   if (carriersError) console.error('[FRIA] Error obteniendo nombres de carriers:', carriersError);
   const namesById = {};
   (carriersData || []).forEach(c => { namesById[c.id] = c.name; });
 
-  const fromRateCards = (rateCardsData || []).map(r => ({
-    name: namesById[r.carrier_id] || 'Carrier',
-    price: Number(r.base_rate),
-    source: 'tarifario',
-    detail: r.valid_until ? `Tarifario · vigente hasta ${r.valid_until}` : 'Tarifario de referencia',
-  }));
+  // Tarifario mas barato por carrier
+  const bestRateCardByCarrier = {};
+  (rateCardsData || []).forEach(r => {
+    const current = bestRateCardByCarrier[r.carrier_id];
+    if (!current || Number(r.base_rate) < Number(current.base_rate)) {
+      bestRateCardByCarrier[r.carrier_id] = r;
+    }
+  });
 
-  const fromHistorical = (historicalQuotes || [])
-    .filter(q => carrierByRfqId[q.selected_rfq_id])
-    .map(q => ({
-      name: namesById[carrierByRfqId[q.selected_rfq_id]] || 'Carrier',
-      price: Number(q.sell_price),
-      source: 'cotizacion_anterior',
-      detail: `Cotización anterior · ${timeAgo(q.created_at)}`,
-    }));
+  // Cotizacion vendida mas reciente por carrier, solo de los carriers relevantes
+  const bestHistoricalByCarrier = {};
+  (historicalQuotes || []).forEach(q => {
+    const carrierId = carrierByRfqId[q.selected_rfq_id];
+    if (!carrierId || !relevantCarrierIds.includes(carrierId)) return;
+    const current = bestHistoricalByCarrier[carrierId];
+    if (!current || new Date(q.created_at) > new Date(current.created_at)) {
+      bestHistoricalByCarrier[carrierId] = { ...q, carrier_id: carrierId };
+    }
+  });
 
-  const result = [...fromRateCards, ...fromHistorical].sort((a, b) => a.price - b.price);
-  console.log('[FRIA] Comparativa final combinada:', result);
+  // Un renglon por CADA carrier contactado -- con precio si hay tarifario o
+  // cotizacion anterior (tarifario manda), y sin precio si no hay ninguno.
+  const result = relevantCarrierIds.map(carrierId => {
+    const rateCard = bestRateCardByCarrier[carrierId];
+    if (rateCard) {
+      return {
+        name: namesById[carrierId] || 'Carrier',
+        price: Number(rateCard.base_rate),
+        source: 'tarifario',
+        detail: rateCard.valid_until ? `Tarifario · vigente hasta ${rateCard.valid_until}` : 'Tarifario de referencia',
+      };
+    }
+    const historical = bestHistoricalByCarrier[carrierId];
+    if (historical) {
+      return {
+        name: namesById[carrierId] || 'Carrier',
+        price: Number(historical.sell_price),
+        source: 'cotizacion_anterior',
+        detail: `Sin tarifario · cotización anterior · ${timeAgo(historical.created_at)}`,
+      };
+    }
+    return {
+      name: namesById[carrierId] || 'Carrier',
+      price: null,
+      source: 'sin_datos',
+      detail: 'Sin tarifa registrada · se solicitó al carrier',
+    };
+  }).sort((a, b) => {
+    if (a.price == null && b.price == null) return 0;
+    if (a.price == null) return 1; // sin datos siempre al final
+    if (b.price == null) return -1;
+    return a.price - b.price;
+  });
+
+  console.log('[FRIA] Comparativa final (un carrier por fila, incluye los sin tarifa):', result);
   return result;
 }
 
@@ -178,12 +223,12 @@ export default function RFQPage({ user, onSellQuote }) {
       const normalized = await fetchNormalizedQuote(rfqId);
       const lane = normalized ? `${normalized.origin_city} → ${normalized.destination_city}` : null;
       const comparison = normalized
-        ? await fetchComparison(normalized.origin_city, normalized.destination_city, normalized.equipment_type)
+        ? await fetchComparison(normalized.id, normalized.origin_city, normalized.destination_city, normalized.equipment_type)
         : [];
 
       saveRFQ({
         id: rfqId, userName: user.name, userId: user.id, message, lane,
-        timestamp: new Date().toISOString(), status: 'sent', hasAnalysis: comparison.length > 0,
+        timestamp: new Date().toISOString(), status: 'sent', hasAnalysis: comparison.some(c => c.price != null),
       });
 
       setResult({ rfqId, lane, message, comparison, normalized });
@@ -264,11 +309,12 @@ export default function RFQPage({ user, onSellQuote }) {
 const SOURCE_BADGE = {
   cotizacion_anterior: { label: 'Cotización anterior', bg: 'var(--info-bg)', color: 'var(--info-text)' },
   tarifario: { label: 'Tarifario', bg: '#EEF1F8', color: 'var(--text-secondary)' },
+  sin_datos: { label: 'RFQ solicitado', bg: '#F5F5F5', color: 'var(--text-secondary)' },
 };
 
 function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
   const comparison = result.comparison || [];
-  const winner = comparison[0];
+  const winner = comparison.find(c => c.price != null);
 
   return (
     <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
@@ -278,6 +324,11 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
       }}>
         <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
           {result.lane || 'Solicitud enviada'}
+          {result.normalized?.equipment_type && (
+            <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>
+              {' · '}{result.normalized.equipment_type.replace(/_/g, ' ')}
+            </span>
+          )}
         </div>
         <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>
           {result.rfqId} · enviado {timeAgo(new Date().toISOString())}
@@ -289,12 +340,12 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
           background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
           padding: '20px 22px', textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)',
         }}>
-          Sin tarifarios ni cotizaciones anteriores en esta ruta. RFQ enviado a los carriers en vivo — el análisis llegará a <strong>{userEmail}</strong> conforme respondan.
+          No se identificaron carriers para esta ruta todavía. RFQ enviado — el análisis llegará a <strong>{userEmail}</strong> conforme respondan.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {comparison.map((c, i) => {
-            const isWinner = i === 0;
+            const isWinner = i === 0 && c.price != null;
             const badge = SOURCE_BADGE[c.source];
             return (
               <div key={i} style={{
@@ -302,6 +353,7 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
                 padding: '18px 22px', borderRadius: 'var(--radius-lg)',
                 background: isWinner ? 'var(--success-bg)' : 'var(--bg-card)',
                 border: `1px solid ${isWinner ? 'var(--success-text)' : 'var(--border-card)'}`,
+                opacity: c.price == null ? 0.75 : 1,
               }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -327,13 +379,13 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
                   fontFamily: 'var(--mono)', fontSize: '19px', fontWeight: 700,
                   color: isWinner ? 'var(--success-text)' : 'var(--text-tertiary)',
                 }}>
-                  ${c.price.toLocaleString()}
+                  {c.price != null ? `$${c.price.toLocaleString()}` : '—'}
                 </div>
               </div>
             );
           })}
           <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center' }}>
-            Referencia de tarifarios y cotizaciones anteriores — el RFQ en vivo sigue en curso, el análisis con respuestas reales llegará a tu correo.
+            Carriers que cubren esta ruta — con tarifario o cotización anterior donde existe, RFQ en vivo solicitado a los demás. El análisis con respuestas reales llegará a tu correo.
           </div>
         </div>
       )}
