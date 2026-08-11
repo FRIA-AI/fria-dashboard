@@ -25,18 +25,22 @@ function sleep(ms) {
 
 // Espera a que n8n termine de crear la fila en `quotes` (INSERT Quote1) con
 // los campos ya normalizados por el LLM (origin_city/destination_city/
-// equipment_type) -- normalmente ya existe para cuando el webhook responde,
-// pero se reintenta una vez por si acaso.
+// equipment_type). El flujo real de n8n hace varias llamadas a IA y manda
+// correos reales por cada carrier antes de terminar -- puede tardar bastante
+// mas que unos segundos, por eso reintentamos varias veces con paciencia.
 async function fetchNormalizedQuote(rfqId) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const { data } = await supabase
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { data, error } = await supabase
       .from('quotes')
       .select('origin_city, destination_city, equipment_type')
       .eq('quote_number', rfqId)
       .maybeSingle();
+    if (error) console.error('[FRIA] Error buscando quotes por quote_number:', error);
+    console.log(`[FRIA] Intento ${attempt + 1}/6 buscando quote_number=${rfqId}:`, data);
     if (data) return data;
-    await sleep(1500);
+    await sleep(3000);
   }
+  console.warn('[FRIA] No se encontró la fila en quotes después de 6 intentos (18s). El RFQ pudo no haberse procesado, o el quote_number no coincide.');
   return null;
 }
 
@@ -49,8 +53,10 @@ async function fetchComparison(originCity, destinationCity, equipmentType) {
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
+  console.log('[FRIA] Buscando comparativa para:', { originCity, destinationCity, equipmentType });
+
   // SR1 - Historical Rates: tarifarios vigentes, match bidireccional
-  const { data: rateCardsData } = await supabase
+  const { data: rateCardsData, error: rateCardsError } = await supabase
     .from('rate_cards')
     .select('carrier_id, base_rate, valid_until')
     .eq('equipment_type', equipmentType)
@@ -59,9 +65,11 @@ async function fetchComparison(originCity, destinationCity, equipmentType) {
     .or(`origin_city.ilike.%${originCity}%,destination_city.ilike.%${destinationCity}%,origin_city.ilike.%${destinationCity}%,destination_city.ilike.%${originCity}%`)
     .order('base_rate', { ascending: true })
     .limit(20);
+  if (rateCardsError) console.error('[FRIA] Error en rate_cards:', rateCardsError);
+  console.log('[FRIA] rate_cards encontrados:', rateCardsData);
 
   // SR2 - Historical Quotes: cotizaciones vendidas en esta ruta/equipo, ultimos 12 meses
-  const { data: historicalQuotes } = await supabase
+  const { data: historicalQuotes, error: historicalError } = await supabase
     .from('quotes')
     .select('sell_price, sell_currency, created_at, selected_rfq_id')
     .eq('equipment_type', equipmentType)
@@ -71,15 +79,18 @@ async function fetchComparison(originCity, destinationCity, equipmentType) {
     .not('sell_price', 'is', null)
     .order('created_at', { ascending: false })
     .limit(20);
+  if (historicalError) console.error('[FRIA] Error en quotes historicos:', historicalError);
+  console.log('[FRIA] cotizaciones vendidas encontradas:', historicalQuotes);
 
   // Resolver el carrier ganador de cada cotizacion vendida (selected_rfq_id -> quote_rfqs)
   const rfqIds = (historicalQuotes || []).map(q => q.selected_rfq_id).filter(Boolean);
   let carrierByRfqId = {};
   if (rfqIds.length) {
-    const { data: winningRfqs } = await supabase
+    const { data: winningRfqs, error: winningError } = await supabase
       .from('quote_rfqs')
       .select('id, carrier_id')
       .in('id', rfqIds);
+    if (winningError) console.error('[FRIA] Error resolviendo carrier ganador:', winningError);
     (winningRfqs || []).forEach(r => { carrierByRfqId[r.id] = r.carrier_id; });
   }
 
@@ -87,12 +98,16 @@ async function fetchComparison(originCity, destinationCity, equipmentType) {
     ...(rateCardsData || []).map(r => r.carrier_id),
     ...Object.values(carrierByRfqId),
   ]);
-  if (allCarrierIds.size === 0) return [];
+  if (allCarrierIds.size === 0) {
+    console.log('[FRIA] Sin carriers en ninguna de las dos fuentes -- comparativa vacia.');
+    return [];
+  }
 
-  const { data: carriersData } = await supabase
+  const { data: carriersData, error: carriersError } = await supabase
     .from('carriers')
     .select('id, name')
     .in('id', [...allCarrierIds]);
+  if (carriersError) console.error('[FRIA] Error obteniendo nombres de carriers:', carriersError);
   const namesById = {};
   (carriersData || []).forEach(c => { namesById[c.id] = c.name; });
 
@@ -112,7 +127,9 @@ async function fetchComparison(originCity, destinationCity, equipmentType) {
       detail: `Cotización anterior · ${timeAgo(q.created_at)}`,
     }));
 
-  return [...fromRateCards, ...fromHistorical].sort((a, b) => a.price - b.price);
+  const result = [...fromRateCards, ...fromHistorical].sort((a, b) => a.price - b.price);
+  console.log('[FRIA] Comparativa final combinada:', result);
+  return result;
 }
 
 export default function RFQPage({ user, onSellQuote }) {
@@ -145,11 +162,15 @@ export default function RFQPage({ user, onSellQuote }) {
     };
 
     try {
-      await fetch(N8N_WEBHOOK_URL, {
+      const webhookResponse = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      }).catch(() => null);
+      }).catch(e => {
+        console.error('[FRIA] El webhook falló o no respondió:', e);
+        return null;
+      });
+      console.log('[FRIA] Webhook respondió, status:', webhookResponse?.status, '(rfqId enviado:', rfqId, ')');
 
       // Una vez que n8n termino (el webhook ya normalizo origen/destino/equipo
       // con el mismo LLM que usa para el correo), leemos esa fila real y
