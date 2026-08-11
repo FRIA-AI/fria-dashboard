@@ -297,7 +297,24 @@ const SOURCE_BADGE = {
 
 function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
   const comparison = result.comparison || [];
-  const winner = comparison.find(c => c.price != null);
+  const cheapest = comparison.find(c => c.price != null);
+
+  function handleSellQuote(c) {
+    if (!onSellQuote) return;
+    onSellQuote({
+      quoteNumber: result.rfqId,
+      origin: result.normalized?.origin_city || '—',
+      destination: result.normalized?.destination_city || '—',
+      equipment: result.normalized?.equipment_type || null,
+      carrierName: c.name,
+      baseRate: c.price || 0,
+      currency: 'MXN',
+      validUntil: null,
+      transitDays: null,
+      quoteId: null,
+      returnTo: 'rfq',
+    });
+  }
 
   return (
     <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
@@ -328,19 +345,20 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {comparison.map((c, i) => {
-            const isWinner = i === 0 && c.price != null;
+            const isCheapest = c === cheapest;
             const badge = SOURCE_BADGE[c.source];
             return (
               <div key={i} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '18px 22px', borderRadius: 'var(--radius-lg)',
-                background: isWinner ? 'var(--success-bg)' : 'var(--bg-card)',
-                border: `1px solid ${isWinner ? 'var(--success-text)' : 'var(--border-card)'}`,
+                background: isCheapest ? 'var(--success-bg)' : 'var(--bg-card)',
+                border: `1px solid ${isCheapest ? 'var(--success-text)' : 'var(--border-card)'}`,
                 opacity: c.price == null ? 0.75 : 1,
+                gap: '16px',
               }}>
-                <div>
+                <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '15px', fontWeight: isWinner ? 700 : 600, color: 'var(--text-primary)' }}>
+                    <span style={{ fontSize: '15px', fontWeight: isCheapest ? 700 : 600, color: 'var(--text-primary)' }}>
                       {c.name}
                     </span>
                     <span style={{
@@ -352,57 +370,43 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
                   </div>
                   <div style={{
                     fontSize: '12px', marginTop: '2px',
-                    color: isWinner ? 'var(--success-text)' : 'var(--text-secondary)',
-                    fontWeight: isWinner ? 600 : 400,
+                    color: isCheapest ? 'var(--success-text)' : 'var(--text-secondary)',
+                    fontWeight: isCheapest ? 600 : 400,
                   }}>
-                    {isWinner ? 'Mejor referencia disponible · ' : ''}{c.detail}
+                    {isCheapest ? 'Más económica · ' : ''}{c.detail}
                   </div>
                 </div>
                 <div style={{
                   fontFamily: 'var(--mono)', fontSize: '19px', fontWeight: 700,
-                  color: isWinner ? 'var(--success-text)' : 'var(--text-tertiary)',
+                  color: isCheapest ? 'var(--success-text)' : 'var(--text-tertiary)',
                 }}>
                   {c.price != null ? `$${c.price.toLocaleString()}` : '—'}
                 </div>
+                {c.price != null && (
+                  <button
+                    onClick={() => handleSellQuote(c)}
+                    style={{
+                      height: '36px', padding: '0 16px', borderRadius: 'var(--radius-md)',
+                      background: isCheapest ? 'var(--accent-primary)' : 'none',
+                      border: isCheapest ? 'none' : '1px solid var(--border-input)',
+                      color: isCheapest ? '#FFFFFF' : 'var(--text-primary)',
+                      fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)',
+                      whiteSpace: 'nowrap', flexShrink: 0,
+                    }}
+                  >
+                    Armar venta →
+                  </button>
+                )}
               </div>
             );
           })}
           <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center' }}>
-            Referencia de tarifarios y cotizaciones anteriores — el RFQ en vivo sigue en curso, el análisis con respuestas reales llegará a tu correo.
+            Referencia de tarifarios y cotizaciones anteriores — elige el carrier con el que quieras armar la venta. El RFQ en vivo sigue en curso, el análisis con respuestas reales llegará a tu correo.
           </div>
         </div>
       )}
 
       <div style={{ display: 'flex', gap: '12px' }}>
-        <button
-          disabled={!winner}
-          title={winner ? '' : 'Disponible cuando haya al menos una referencia'}
-          onClick={() => {
-            if (!winner || !onSellQuote) return;
-            onSellQuote({
-              quoteNumber: result.rfqId,
-              origin: result.normalized?.origin_city || '—',
-              destination: result.normalized?.destination_city || '—',
-              equipment: result.normalized?.equipment_type || null,
-              carrierName: winner.name,
-              baseRate: winner.price || 0,
-              currency: 'MXN',
-              validUntil: null,
-              transitDays: null,
-              quoteId: null,
-              returnTo: 'rfq',
-            });
-          }}
-          style={{
-            height: '46px', padding: '0 26px', borderRadius: 'var(--radius-md)',
-            background: winner ? 'var(--accent-primary)' : 'var(--border-input)',
-            color: winner ? '#FFFFFF' : 'var(--text-secondary)',
-            border: 'none', fontSize: '14px', fontWeight: 700,
-            cursor: winner ? 'pointer' : 'not-allowed', fontFamily: 'var(--font)',
-          }}
-        >
-          Armar cotización de venta →
-        </button>
         <button onClick={onNewQuote} style={{
           height: '46px', padding: '0 20px', borderRadius: 'var(--radius-md)',
           background: 'none', border: '1px solid var(--border-input)', color: 'var(--text-primary)',
