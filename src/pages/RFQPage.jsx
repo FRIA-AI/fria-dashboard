@@ -23,64 +23,47 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Espera a que n8n termine de crear la fila en `quotes` (INSERT Quote1) con
-// los campos ya normalizados por el LLM (origin_city/destination_city/
-// equipment_type), y de mandar los RFQs reales a los carriers relevantes
-// (crea una fila en quote_rfqs por cada uno). El flujo real de n8n hace
-// varias llamadas a IA y manda correos reales antes de terminar -- puede
-// tardar bastante mas que unos segundos, por eso reintentamos con paciencia.
+// Espera a que n8n cree la fila en `quotes` (INSERT Quote1) con los campos
+// ya normalizados por el LLM (origin_city/destination_city/equipment_type).
+// Esto pasa temprano en el flujo -- justo despues de UNA llamada al LLM, no
+// hace falta esperar a que termine todo el ciclo de contactar carriers.
 async function fetchNormalizedQuote(rfqId) {
-  for (let attempt = 0; attempt < 6; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     const { data, error } = await supabase
       .from('quotes')
       .select('id, origin_city, destination_city, equipment_type')
       .eq('quote_number', rfqId)
       .maybeSingle();
     if (error) console.error('[FRIA] Error buscando quotes por quote_number:', error);
-    console.log(`[FRIA] Intento ${attempt + 1}/6 buscando quote_number=${rfqId}:`, data);
+    console.log(`[FRIA] Intento ${attempt + 1}/8 buscando quote_number=${rfqId}:`, data);
     if (data) return data;
-    await sleep(3000);
+    await sleep(1500);
   }
-  console.warn('[FRIA] No se encontró la fila en quotes después de 6 intentos (18s). El RFQ pudo no haberse procesado, o el quote_number no coincide.');
+  console.warn('[FRIA] No se encontró la fila en quotes después de 8 intentos (12s).');
   return null;
 }
 
-// Los carriers "relevantes para esta ruta" son, literalmente, a quienes n8n
-// ya decidio contactar (una fila en quote_rfqs por cada uno, creada por SR3 -
-// Carriers for RFQ). Para CADA uno de esos carriers -- no solo los que ya
-// tienen precio -- se busca primero tarifario, si no hay se busca cotizacion
-// anterior vigente (ultimos 12 meses), y si tampoco hay, se muestra sin
-// precio con la aclaracion de que se solicito al carrier.
+// Busca tarifarios y cotizaciones anteriores vendidas para esta ruta/equipo,
+// SIN esperar a que termine el ciclo de contacto en vivo a carriers (eso es
+// lo que lo hacia lento, y ademas no era confiable -- el webhook a veces
+// responde antes de que ese ciclo termine). Esto solo depende de datos que
+// YA existen en la base, por eso puede correr de inmediato.
 async function fetchComparison(quoteId, originCity, destinationCity, equipmentType) {
   console.log('[FRIA] Buscando comparativa para:', { quoteId, originCity, destinationCity, equipmentType });
-
-  // Carriers realmente contactados para ESTA cotizacion
-  const { data: contactedRfqs, error: contactedError } = await supabase
-    .from('quote_rfqs')
-    .select('carrier_id')
-    .eq('quote_id', quoteId);
-  if (contactedError) console.error('[FRIA] Error obteniendo carriers contactados:', contactedError);
-  const relevantCarrierIds = [...new Set((contactedRfqs || []).map(r => r.carrier_id).filter(Boolean))];
-  console.log('[FRIA] Carriers contactados para esta ruta:', relevantCarrierIds);
-
-  if (relevantCarrierIds.length === 0) {
-    console.log('[FRIA] Ningun carrier fue contactado para esta ruta -- comparativa vacia.');
-    return [];
-  }
 
   const today = new Date().toISOString().slice(0, 10);
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
-  // Tarifarios vigentes de esos carriers en esta ruta/equipo
+  // Tarifarios vigentes en esta ruta/equipo
   const { data: rateCardsData, error: rateCardsError } = await supabase
     .from('rate_cards')
     .select('carrier_id, base_rate, valid_until')
-    .in('carrier_id', relevantCarrierIds)
     .eq('equipment_type', equipmentType)
     .eq('is_active', true)
     .or(`valid_until.is.null,valid_until.gte.${today}`)
-    .or(`origin_city.ilike.%${originCity}%,destination_city.ilike.%${destinationCity}%,origin_city.ilike.%${destinationCity}%,destination_city.ilike.%${originCity}%`);
+    .or(`origin_city.ilike.%${originCity}%,destination_city.ilike.%${destinationCity}%,origin_city.ilike.%${destinationCity}%,destination_city.ilike.%${originCity}%`)
+    .limit(50);
   if (rateCardsError) console.error('[FRIA] Error en rate_cards:', rateCardsError);
   console.log('[FRIA] rate_cards encontrados:', rateCardsData);
 
@@ -111,10 +94,19 @@ async function fetchComparison(quoteId, originCity, destinationCity, equipmentTy
     (winningRfqs || []).forEach(r => { carrierByRfqId[r.id] = r.carrier_id; });
   }
 
+  const allCarrierIds = new Set([
+    ...(rateCardsData || []).map(r => r.carrier_id),
+    ...Object.values(carrierByRfqId),
+  ]);
+  if (allCarrierIds.size === 0) {
+    console.log('[FRIA] Sin tarifarios ni cotizaciones anteriores en esta ruta/equipo -- comparativa vacia.');
+    return [];
+  }
+
   const { data: carriersData, error: carriersError } = await supabase
     .from('carriers')
     .select('id, name')
-    .in('id', relevantCarrierIds);
+    .in('id', [...allCarrierIds]);
   if (carriersError) console.error('[FRIA] Error obteniendo nombres de carriers:', carriersError);
   const namesById = {};
   (carriersData || []).forEach(c => { namesById[c.id] = c.name; });
@@ -128,20 +120,20 @@ async function fetchComparison(quoteId, originCity, destinationCity, equipmentTy
     }
   });
 
-  // Cotizacion vendida mas reciente por carrier, solo de los carriers relevantes
+  // Cotizacion vendida mas reciente por carrier
   const bestHistoricalByCarrier = {};
   (historicalQuotes || []).forEach(q => {
     const carrierId = carrierByRfqId[q.selected_rfq_id];
-    if (!carrierId || !relevantCarrierIds.includes(carrierId)) return;
+    if (!carrierId) return;
     const current = bestHistoricalByCarrier[carrierId];
     if (!current || new Date(q.created_at) > new Date(current.created_at)) {
       bestHistoricalByCarrier[carrierId] = { ...q, carrier_id: carrierId };
     }
   });
 
-  // Un renglon por CADA carrier contactado -- con precio si hay tarifario o
-  // cotizacion anterior (tarifario manda), y sin precio si no hay ninguno.
-  const result = relevantCarrierIds.map(carrierId => {
+  // PRIORIDAD: el tarifario manda si existe para ese carrier. La cotizacion
+  // anterior solo se usa si el carrier NO tiene tarifario.
+  const result = [...allCarrierIds].map(carrierId => {
     const rateCard = bestRateCardByCarrier[carrierId];
     if (rateCard) {
       return {
@@ -152,28 +144,15 @@ async function fetchComparison(quoteId, originCity, destinationCity, equipmentTy
       };
     }
     const historical = bestHistoricalByCarrier[carrierId];
-    if (historical) {
-      return {
-        name: namesById[carrierId] || 'Carrier',
-        price: Number(historical.sell_price),
-        source: 'cotizacion_anterior',
-        detail: `Sin tarifario · cotización anterior · ${timeAgo(historical.created_at)}`,
-      };
-    }
     return {
       name: namesById[carrierId] || 'Carrier',
-      price: null,
-      source: 'sin_datos',
-      detail: 'Sin tarifa registrada · se solicitó al carrier',
+      price: Number(historical.sell_price),
+      source: 'cotizacion_anterior',
+      detail: `Sin tarifario · cotización anterior · ${timeAgo(historical.created_at)}`,
     };
-  }).sort((a, b) => {
-    if (a.price == null && b.price == null) return 0;
-    if (a.price == null) return 1; // sin datos siempre al final
-    if (b.price == null) return -1;
-    return a.price - b.price;
-  });
+  }).sort((a, b) => a.price - b.price);
 
-  console.log('[FRIA] Comparativa final (un carrier por fila, incluye los sin tarifa):', result);
+  console.log('[FRIA] Comparativa final (tarifario > cotización anterior, deduplicada por carrier):', result);
   return result;
 }
 
@@ -207,19 +186,22 @@ export default function RFQPage({ user, onSellQuote }) {
     };
 
     try {
-      const webhookResponse = await fetch(N8N_WEBHOOK_URL, {
+      // El RFQ real (correos a carriers) se manda sin esperarlo -- eso es lo
+      // que hacia lenta la pantalla. Empezamos a buscar la fila normalizada
+      // de inmediato, en paralelo, no despues de que termine todo el flujo.
+      fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+      }).then(res => {
+        console.log('[FRIA] Webhook respondió, status:', res.status, '(rfqId enviado:', rfqId, ')');
       }).catch(e => {
         console.error('[FRIA] El webhook falló o no respondió:', e);
-        return null;
       });
-      console.log('[FRIA] Webhook respondió, status:', webhookResponse?.status, '(rfqId enviado:', rfqId, ')');
 
-      // Una vez que n8n termino (el webhook ya normalizo origen/destino/equipo
-      // con el mismo LLM que usa para el correo), leemos esa fila real y
-      // corremos la misma comparativa que arma Basic LLM Chain4.
+      // Una vez que n8n normalizo origen/destino/equipo (el mismo LLM que usa
+      // para el correo), leemos esa fila real y buscamos tarifarios/
+      // cotizaciones anteriores -- sin esperar a que termine el envio en vivo.
       const normalized = await fetchNormalizedQuote(rfqId);
       const lane = normalized ? `${normalized.origin_city} → ${normalized.destination_city}` : null;
       const comparison = normalized
@@ -340,7 +322,7 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
           background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
           padding: '20px 22px', textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)',
         }}>
-          No se identificaron carriers para esta ruta todavía. RFQ enviado — el análisis llegará a <strong>{userEmail}</strong> conforme respondan.
+          Sin tarifarios ni cotizaciones anteriores en esta ruta. RFQ enviado a los carriers en vivo — el análisis llegará a <strong>{userEmail}</strong> conforme respondan.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -385,7 +367,7 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
             );
           })}
           <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center' }}>
-            Carriers que cubren esta ruta — con tarifario o cotización anterior donde existe, RFQ en vivo solicitado a los demás. El análisis con respuestas reales llegará a tu correo.
+            Referencia de tarifarios y cotizaciones anteriores — el RFQ en vivo sigue en curso, el análisis con respuestas reales llegará a tu correo.
           </div>
         </div>
       )}
