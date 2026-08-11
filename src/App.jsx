@@ -31,6 +31,7 @@ export default function App() {
   const [mounted, setMounted] = useState(false);
   const [sellContext, setSellContext] = useState(null);
   const [isFriaStaff, setIsFriaStaff] = useState(false);
+  const [rfqResult, setRfqResult] = useState(null);
 
   function goToSellQuote(context) {
     setSellContext(context);
@@ -124,7 +125,7 @@ export default function App() {
       <TopNav user={user} activeTab={activeTab} setActiveTab={setActiveTab} isFriaStaff={isFriaStaff} />
       <main style={{ flex: 1, overflowY: activeTab === 'chat' ? 'hidden' : 'auto', background: 'var(--bg-page)' }}>
         {activeTab === 'home'      && <HomePage user={user} setActiveTab={setActiveTab} />}
-        {activeTab === 'rfq'       && <RFQPage user={user} onSellQuote={goToSellQuote} />}
+        {activeTab === 'rfq'       && <RFQPage user={user} onSellQuote={goToSellQuote} result={rfqResult} setResult={setRfqResult} />}
         {activeTab === 'history'   && <HistoryPage user={user} onSellQuote={goToSellQuote} />}
         {activeTab === 'metrics'   && <MetricsPage user={user} />}
         {activeTab === 'chat'      && <ChatPage user={user} />}
