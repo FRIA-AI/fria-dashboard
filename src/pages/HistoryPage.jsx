@@ -31,7 +31,7 @@ function timeAgo(iso) {
 // Definidas ANTES de usarse, como const -- no dependemos de hoisting de function declarations.
 const HistorialRow = ({ header, cols }) => (
   <div style={{
-    display: 'grid', gridTemplateColumns: '200px 1fr 100px 140px 100px 90px 20px',
+    display: 'grid', gridTemplateColumns: 'minmax(200px, 1.2fr) minmax(220px, 2fr) minmax(90px, 1fr) minmax(130px, 1fr) minmax(90px, 0.8fr) minmax(80px, 0.8fr) 24px',
     padding: header ? '12px 22px' : '16px 22px',
     background: '#FFFFFF',
     borderTop: header ? 'none' : '1px solid var(--border-card)',
@@ -204,7 +204,7 @@ export default function HistoryPage({ user, onSellQuote }) {
   }
 
   return (
-    <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1100px' }}>
+    <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>
         Historial de cotizaciones
       </div>
