@@ -310,7 +310,7 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
       currency: 'MXN',
       validUntil: null,
       transitDays: null,
-      quoteId: null,
+      quoteId: result.normalized?.id || null,
       returnTo: 'rfq',
     });
   }
