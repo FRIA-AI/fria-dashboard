@@ -48,7 +48,7 @@ const HistorialRow = ({ header, cols }) => (
 
 const DetalleRow = ({ header, cols }) => (
   <div style={{
-    display: 'grid', gridTemplateColumns: '1.1fr 0.9fr 0.8fr 1.3fr 1.1fr',
+    display: 'grid', gridTemplateColumns: 'minmax(140px, 1.3fr) minmax(120px, 1fr) minmax(110px, 1fr) minmax(120px, 1fr) minmax(110px, 1fr) minmax(90px, 0.8fr)',
     padding: header ? '12px 22px' : '14px 22px',
     background: '#FFFFFF',
     borderTop: header ? 'none' : '1px solid var(--border-card)',
@@ -63,21 +63,122 @@ const DetalleRow = ({ header, cols }) => (
   </div>
 );
 
+// Misma logica de referencia que RFQPage.jsx (tarifarios + cotizaciones
+// vendidas anteriores, match bidireccional en pares, tarifario > cotizacion
+// anterior por carrier) -- aqui se combina ademas con los RFQs reales que
+// SI se mandaron para esta cotizacion especifica.
+async function fetchReferenceByCarrier(quoteId, originCity, destinationCity, equipmentType) {
+  const today = new Date().toISOString().slice(0, 10);
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+  const { data: rateCardsData } = await supabase
+    .from('rate_cards')
+    .select('carrier_id, base_rate, valid_until')
+    .eq('equipment_type', equipmentType)
+    .eq('is_active', true)
+    .or(`valid_until.is.null,valid_until.gte.${today}`)
+    .or(`and(origin_city.ilike.%${originCity}%,destination_city.ilike.%${destinationCity}%),and(origin_city.ilike.%${destinationCity}%,destination_city.ilike.%${originCity}%)`)
+    .limit(50);
+
+  const { data: historicalQuotes } = await supabase
+    .from('quotes')
+    .select('sell_price, created_at, selected_rfq_id')
+    .neq('id', quoteId)
+    .eq('equipment_type', equipmentType)
+    .ilike('origin_city', `%${originCity}%`)
+    .ilike('destination_city', `%${destinationCity}%`)
+    .gte('created_at', twelveMonthsAgo.toISOString())
+    .not('sell_price', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const rfqIds = (historicalQuotes || []).map(q => q.selected_rfq_id).filter(Boolean);
+  let carrierByRfqId = {};
+  if (rfqIds.length) {
+    const { data: winningRfqs } = await supabase.from('quote_rfqs').select('id, carrier_id').in('id', rfqIds);
+    (winningRfqs || []).forEach(r => { carrierByRfqId[r.id] = r.carrier_id; });
+  }
+
+  const bestRateCardByCarrier = {};
+  (rateCardsData || []).forEach(r => {
+    const current = bestRateCardByCarrier[r.carrier_id];
+    if (!current || Number(r.base_rate) < Number(current.base_rate)) bestRateCardByCarrier[r.carrier_id] = r;
+  });
+
+  const bestHistoricalByCarrier = {};
+  (historicalQuotes || []).forEach(q => {
+    const carrierId = carrierByRfqId[q.selected_rfq_id];
+    if (!carrierId) return;
+    const current = bestHistoricalByCarrier[carrierId];
+    if (!current || new Date(q.created_at) > new Date(current.created_at)) bestHistoricalByCarrier[carrierId] = { ...q, carrier_id: carrierId };
+  });
+
+  const byCarrier = {};
+  Object.keys(bestRateCardByCarrier).forEach(carrierId => {
+    const rc = bestRateCardByCarrier[carrierId];
+    byCarrier[carrierId] = {
+      source: 'tarifario', price: Number(rc.base_rate),
+      detail: rc.valid_until ? `Vigente hasta ${rc.valid_until}` : 'Tarifario de referencia',
+    };
+  });
+  Object.keys(bestHistoricalByCarrier).forEach(carrierId => {
+    if (byCarrier[carrierId]) return; // el tarifario ya manda si existe
+    const h = bestHistoricalByCarrier[carrierId];
+    byCarrier[carrierId] = { source: 'cotizacion_anterior', price: Number(h.sell_price), detail: `Cotización de hace ${timeAgo(h.created_at)}` };
+  });
+
+  return byCarrier;
+}
+
+const ORIGIN_BADGE = {
+  tarifario: { label: 'Tarifario', bg: '#EEF1F8', color: 'var(--text-secondary)' },
+  cotizacion_anterior: { label: 'Cotización anterior', bg: 'var(--info-bg)', color: 'var(--info-text)' },
+};
+
 const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
-  const [carriers, setCarriers] = useState([]);
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const { data, error } = await supabase
+      const { data: liveRfqs, error } = await supabase
         .from('quote_rfqs')
-        .select('status, quoted_rate, valid_until, transit_days, carrier_notes, carriers(name)')
+        .select('carrier_id, status, quoted_rate, valid_until, transit_days, carrier_notes, carriers(name)')
         .eq('quote_id', quote.id);
-      if (!error && data) setCarriers(data);
+      if (error) { setLoading(false); return; }
+
+      const referenceByCarrier = await fetchReferenceByCarrier(
+        quote.id, quote.origin_city, quote.destination_city, quote.equipment_type
+      );
+
+      // Nombres de carriers que solo vienen de la referencia (no tienen RFQ en vivo)
+      const liveCarrierIds = new Set((liveRfqs || []).map(r => r.carrier_id));
+      const onlyReferenceIds = Object.keys(referenceByCarrier).filter(id => !liveCarrierIds.has(id));
+      let referenceNames = {};
+      if (onlyReferenceIds.length) {
+        const { data: carriersData } = await supabase.from('carriers').select('id, name').in('id', onlyReferenceIds);
+        (carriersData || []).forEach(c => { referenceNames[c.id] = c.name; });
+      }
+
+      const liveRows = (liveRfqs || []).map(r => ({
+        carrierId: r.carrier_id,
+        name: r.carriers?.name || 'Carrier',
+        reference: referenceByCarrier[r.carrier_id] || null,
+        live: r,
+      }));
+      const referenceOnlyRows = onlyReferenceIds.map(id => ({
+        carrierId: id,
+        name: referenceNames[id] || 'Carrier',
+        reference: referenceByCarrier[id],
+        live: null,
+      }));
+
+      setRows([...liveRows, ...referenceOnlyRows]);
       setLoading(false);
     }
     load();
-  }, [quote.id]);
+  }, [quote.id, quote.origin_city, quote.destination_city, quote.equipment_type]);
 
   return (
     <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -89,7 +190,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
           {quote.origin_city} → {quote.destination_city}
         </div>
         <div style={{ fontFamily: 'var(--mono)', fontSize: '13px', color: 'var(--text-secondary)' }}>
-          {quote.quote_number} · {carriers.length} carriers contactados
+          {quote.quote_number} · {rows.length} carriers considerados
         </div>
       </div>
 
@@ -97,38 +198,52 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
         <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
       ) : (
         <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
-          <DetalleRow header cols={['Carrier', 'Estado', 'Tarifa', 'Detalle', '']} />
-          {carriers.map((c, i) => {
-            const st = RFQ_STATUS_MAP[c.status] || RFQ_STATUS_MAP.sent;
-            let detail = '—';
-            if (c.status === 'responded' && c.valid_until) detail = `Vigente hasta ${c.valid_until}`;
-            else if (c.carrier_notes) detail = c.carrier_notes.split('\n')[0].slice(0, 80);
+          <DetalleRow header cols={['Carrier', 'Origen', 'Tarifa referencia', 'RFQ', 'Tarifa cotizada', '']} />
+          {rows.map((r, i) => {
+            const originBadge = r.reference ? ORIGIN_BADGE[r.reference.source] : null;
+            const liveStatus = r.live ? (RFQ_STATUS_MAP[r.live.status] || RFQ_STATUS_MAP.sent) : null;
+            const bestPrice = r.live?.status === 'responded' && r.live.quoted_rate ? Number(r.live.quoted_rate) : r.reference?.price ?? null;
+            const bestCarrierName = r.name;
             return (
               <DetalleRow key={i} cols={[
-                <span key="name" style={{ fontWeight: 600 }}>{c.carriers?.name || 'Carrier'}</span>,
-                <span key="st" style={{
-                  padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600,
-                  background: st.bg, color: st.color,
-                }}>{st.label}</span>,
-                <span key="rate" style={{
-                  fontFamily: 'var(--mono)',
-                  color: c.quoted_rate ? 'var(--success-text)' : 'var(--text-secondary)',
-                }}>
-                  {c.quoted_rate ? `$${Number(c.quoted_rate).toLocaleString()}` : '—'}
+                <span key="name" style={{ fontWeight: 600 }}>{r.name}</span>,
+                <span key="origin">
+                  {originBadge ? (
+                    <span style={{
+                      padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600,
+                      background: originBadge.bg, color: originBadge.color,
+                    }}>{originBadge.label}</span>
+                  ) : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
                 </span>,
-                <span key="detail" style={{ color: 'var(--text-secondary)' }}>{detail}</span>,
+                <span key="refprice" style={{ fontFamily: 'var(--mono)', color: r.reference ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                  {r.reference ? `$${r.reference.price.toLocaleString()}` : '—'}
+                </span>,
+                <span key="live">
+                  {liveStatus ? (
+                    <span style={{
+                      padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600,
+                      background: liveStatus.bg, color: liveStatus.color,
+                    }}>{liveStatus.label}</span>
+                  ) : <span style={{ color: 'var(--text-secondary)' }}>No se envió</span>}
+                </span>,
+                <span key="liverate" style={{
+                  fontFamily: 'var(--mono)',
+                  color: r.live?.quoted_rate ? 'var(--success-text)' : 'var(--text-secondary)',
+                }}>
+                  {r.live?.quoted_rate ? `$${Number(r.live.quoted_rate).toLocaleString()}` : '—'}
+                </span>,
                 <span key="action">
-                  {c.status === 'responded' && c.quoted_rate && onSellQuote && (
+                  {bestPrice != null && onSellQuote && (
                     <button onClick={() => onSellQuote({
                       quoteNumber: quote.quote_number,
                       origin: quote.origin_city,
                       destination: quote.destination_city,
                       equipment: quote.equipment_type,
-                      carrierName: c.carriers?.name || 'Carrier',
-                      baseRate: Number(c.quoted_rate),
+                      carrierName: bestCarrierName,
+                      baseRate: bestPrice,
                       currency: 'MXN',
-                      validUntil: c.valid_until,
-                      transitDays: c.transit_days,
+                      validUntil: r.live?.valid_until || null,
+                      transitDays: r.live?.transit_days || null,
                       quoteId: quote.id,
                       returnTo: 'history',
                     })} style={{
