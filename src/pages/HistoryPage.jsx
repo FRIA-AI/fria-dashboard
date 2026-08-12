@@ -194,6 +194,36 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
         </div>
       </div>
 
+      {quote.sell_price != null && (
+        <div style={{
+          background: 'var(--success-bg)', border: '1px solid var(--success-text)', borderRadius: 'var(--radius-lg)',
+          padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--success-text)' }}>
+              Venta registrada · ${Number(quote.sell_price).toLocaleString()} MXN
+            </div>
+            {quote.sell_pdf_generated_at && (
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                Generada el {new Date(quote.sell_pdf_generated_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </div>
+            )}
+          </div>
+          {quote.sell_pdf_url ? (
+            <a href={quote.sell_pdf_url} target="_blank" rel="noopener noreferrer" style={{
+              height: '36px', padding: '0 16px', borderRadius: 'var(--radius-md)',
+              background: 'var(--accent-primary)', color: '#FFFFFF', textDecoration: 'none',
+              fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font)',
+              display: 'flex', alignItems: 'center',
+            }}>
+              Descargar PDF
+            </a>
+          ) : (
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>PDF no disponible</span>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
       ) : (
@@ -276,7 +306,7 @@ export default function HistoryPage({ user, onSellQuote }) {
 
       const { data: quotesData, error: quotesError } = await supabase
         .from('quotes')
-        .select('id, quote_number, origin_city, destination_city, equipment_type, status, created_at')
+        .select('id, quote_number, origin_city, destination_city, equipment_type, status, created_at, sell_price, sell_pdf_url, sell_pdf_generated_at')
         .eq('requested_by', user.tenantUserId)
         .order('created_at', { ascending: false });
 
