@@ -157,10 +157,9 @@ async function fetchComparison(quoteId, originCity, destinationCity, equipmentTy
   return result;
 }
 
-export default function RFQPage({ user, onSellQuote }) {
+export default function RFQPage({ user, onSellQuote, result, setResult }) {
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState('idle'); // idle | loading | success | error
-  const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
   async function handleSubmit(e) {
@@ -223,7 +222,7 @@ export default function RFQPage({ user, onSellQuote }) {
     }
   }
 
-  if (status === 'success' && result) {
+  if (result) {
     return <ComparativaView result={result} userEmail={user.email} onNewQuote={() => { setStatus('idle'); setResult(null); }} onSellQuote={onSellQuote} />;
   }
 
