@@ -444,10 +444,38 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.setFont('JetBrainsMono', 'normal');
     doc.text('Página 1 de 1', R, footerTextY, { align: 'right' });
 
-    doc.save(`Cotizacion_${context.quoteNumber || 'FRIA'}.pdf`);
+    // Se obtiene el PDF como blob para poder usarlo dos veces: descarga
+    // inmediata en el navegador Y respaldo real en Storage -- antes solo
+    // se descargaba y el archivo se perdia, sin quedar registrado en FRIA.
+    const blob = doc.output('blob');
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `Cotizacion_${context.quoteNumber || 'FRIA'}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(downloadUrl);
 
     if (context.quoteId) {
       setSaving(true);
+      let pdfUrl = null;
+      try {
+        const fileName = `${context.quoteId}.pdf`;
+        const { error: uploadError } = await supabase.storage
+          .from('sell-quotes')
+          .upload(fileName, blob, { contentType: 'application/pdf', upsert: true });
+
+        if (uploadError) {
+          console.error('No se pudo guardar el PDF en Storage:', uploadError);
+        } else {
+          const { data: urlData } = supabase.storage.from('sell-quotes').getPublicUrl(fileName);
+          pdfUrl = urlData.publicUrl;
+        }
+      } catch (e) {
+        console.error('Error subiendo el PDF de venta:', e);
+      }
+
       await supabase
         .from('quotes')
         .update({
@@ -456,6 +484,8 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
           sell_margin_value: marginAmount,
           sell_currency: currency,
           sell_pdf_generated_at: new Date().toISOString(),
+          sell_pdf_url: pdfUrl,
+          status: 'sold',
         })
         .eq('id', context.quoteId);
       setSaving(false);
