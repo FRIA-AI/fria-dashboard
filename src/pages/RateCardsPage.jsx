@@ -257,48 +257,62 @@ export default function RateCardsPage({ user }) {
               </select>
 
               <div
+                onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) validateAndSetFile(f); }}
                 onDragOver={e => { e.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
-                onDrop={e => {
-                  e.preventDefault(); setDragging(false);
-                  if (e.dataTransfer.files[0]) validateAndSetFile(e.dataTransfer.files[0]);
-                }}
                 onClick={() => document.getElementById('tarifario-file-input').click()}
                 style={{
                   border: `2px dashed ${dragging ? 'var(--accent-primary)' : 'rgba(46,91,168,.35)'}`,
                   borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '20px',
+                  alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '24px',
                   background: 'var(--bg-panel)', cursor: 'pointer',
                 }}
               >
-                <input id="tarifario-file-input" type="file" accept=".xlsx" style={{ display: 'none' }}
-                  onChange={e => e.target.files[0] && validateAndSetFile(e.target.files[0])} />
                 {file ? (
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{file.name}</div>
+                  <>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{file.name}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{(file.size / 1024).toFixed(1)} KB</div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleUploadSubmit(); }}
+                        disabled={!selectedCarrierId || uploadStatus === 'loading'}
+                        title={!selectedCarrierId ? 'Selecciona un carrier primero' : ''}
+                        style={{
+                          height: '36px', padding: '0 16px', borderRadius: 'var(--radius-md)',
+                          background: selectedCarrierId ? 'var(--accent-primary)' : 'var(--border-input)',
+                          color: selectedCarrierId ? '#FFFFFF' : 'var(--text-secondary)', border: 'none',
+                          fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font)',
+                          cursor: selectedCarrierId && uploadStatus !== 'loading' ? 'pointer' : 'not-allowed',
+                        }}
+                      >
+                        {uploadStatus === 'loading' ? 'Subiendo…' : 'Subir archivo'}
+                      </button>
+                      <button onClick={e => { e.stopPropagation(); setFile(null); }} style={{
+                        height: '36px', padding: '0 12px', borderRadius: 'var(--radius-md)', background: 'none',
+                        border: '1px solid var(--border-input)', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'var(--font)',
+                      }}>
+                        Quitar
+                      </button>
+                    </div>
+                  </>
                 ) : (
                   <>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Arrastra tu tarifario aquí</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>.xlsx · hasta 10MB</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Arrastra tu Excel de tarifarios aquí</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>.xlsx</div>
+                    <div style={{
+                      height: '36px', padding: '0 16px', borderRadius: 'var(--radius-md)', background: 'var(--accent-primary)',
+                      color: '#FFFFFF', display: 'flex', alignItems: 'center', fontSize: '12px', fontWeight: 700,
+                    }}>
+                      Subir archivo
+                    </div>
                   </>
                 )}
+                <input id="tarifario-file-input" type="file" accept=".xlsx" onChange={e => { const f = e.target.files[0]; if (f) validateAndSetFile(f); }} style={{ display: 'none' }} />
               </div>
 
-              {uploadError && <div style={{ fontSize: '12px', color: 'var(--alert-text)' }}>{uploadError}</div>}
-
-              <button
-                onClick={handleUploadSubmit}
-                disabled={!file || !selectedCarrierId || uploadStatus === 'loading'}
-                title={!selectedCarrierId ? 'Selecciona un carrier primero' : ''}
-                style={{
-                  alignSelf: 'flex-start', height: '38px', padding: '0 18px', borderRadius: 'var(--radius-md)',
-                  background: (file && selectedCarrierId) ? 'var(--accent-primary)' : 'var(--border-input)',
-                  color: (file && selectedCarrierId) ? '#FFFFFF' : 'var(--text-secondary)', border: 'none',
-                  fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font)',
-                  cursor: (file && selectedCarrierId && uploadStatus !== 'loading') ? 'pointer' : 'not-allowed',
-                }}
-              >
-                {uploadStatus === 'loading' ? 'Subiendo…' : 'Subir tarifario'}
-              </button>
+              {uploadError && (
+                <div style={{ fontSize: '13px', color: 'var(--alert-text)' }}>{uploadError}</div>
+              )}
 
               {uploadStatus === 'success' && uploadResult && (
                 <div style={{ fontSize: '12px', color: 'var(--success-text)' }}>
