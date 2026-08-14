@@ -236,7 +236,7 @@ export default function RateCardsPage({ user }) {
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                 Formato estándar para cargar tarifas por ruta y equipo.
               </div>
-              <a href="/templates/FRIA_Plantilla_Tarifario.xlsx" download style={{
+              <a href="/FRIA_Plantilla_Tarifario.xlsx" download style={{
                 alignSelf: 'flex-start', height: '38px', padding: '0 18px', borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--border-input)', background: 'none', color: 'var(--text-primary)',
                 fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)',
