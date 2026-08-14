@@ -37,49 +37,110 @@ const TabBar = ({ tab, setTab }) => (
   </div>
 );
 
-export default function RateCardsPage() {
+const TARIFARIO_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook-test/fria-tarifarios';
+
+export default function RateCardsPage({ user }) {
   const [tab, setTab] = useState('Tarifarios');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
 
+  const [carriers, setCarriers] = useState([]);
+  const [selectedCarrierId, setSelectedCarrierId] = useState('');
+  const [file, setFile] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState('idle'); // idle | loading | success | error
+  const [uploadResult, setUploadResult] = useState(null);
+  const [uploadError, setUploadError] = useState('');
+
   const [lanes, setLanes] = useState([]);
   const [loadingLanes, setLoadingLanes] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      const { data: rateCards, error } = await supabase
-        .from('rate_cards')
-        .select('carrier_id, ingestion_status, created_at');
+  async function loadRateCards() {
+    setLoading(true);
+    const { data: rateCards, error } = await supabase
+      .from('rate_cards')
+      .select('carrier_id, ingestion_status, created_at');
 
-      if (error || !rateCards) { setLoading(false); return; }
+    if (error || !rateCards) { setLoading(false); return; }
 
-      const carrierIds = [...new Set(rateCards.map(r => r.carrier_id).filter(Boolean))];
-      let namesById = {};
-      if (carrierIds.length) {
-        const { data: carriers } = await supabase
-          .from('carriers')
-          .select('id, name')
-          .in('id', carrierIds);
-        (carriers || []).forEach(c => { namesById[c.id] = c.name; });
-      }
-
-      const grouped = {};
-      rateCards.forEach(r => {
-        const key = r.carrier_id || 'sin_carrier';
-        if (!grouped[key]) {
-          grouped[key] = { carrier: namesById[r.carrier_id] || 'Sin carrier', total: 0, errors: 0, lastDate: null };
-        }
-        grouped[key].total += 1;
-        if (r.ingestion_status === 'error') grouped[key].errors += 1;
-        if (!grouped[key].lastDate || r.created_at > grouped[key].lastDate) grouped[key].lastDate = r.created_at;
-      });
-
-      setRows(Object.values(grouped));
-      setLoading(false);
+    const carrierIds = [...new Set(rateCards.map(r => r.carrier_id).filter(Boolean))];
+    let namesById = {};
+    if (carrierIds.length) {
+      const { data: carriersData } = await supabase
+        .from('carriers')
+        .select('id, name')
+        .in('id', carrierIds);
+      (carriersData || []).forEach(c => { namesById[c.id] = c.name; });
     }
-    load();
+
+    const grouped = {};
+    rateCards.forEach(r => {
+      const key = r.carrier_id || 'sin_carrier';
+      if (!grouped[key]) {
+        grouped[key] = { carrier: namesById[r.carrier_id] || 'Sin carrier', total: 0, errors: 0, lastDate: null };
+      }
+      grouped[key].total += 1;
+      if (r.ingestion_status === 'error') grouped[key].errors += 1;
+      if (!grouped[key].lastDate || r.created_at > grouped[key].lastDate) grouped[key].lastDate = r.created_at;
+    });
+
+    setRows(Object.values(grouped));
+    setLoading(false);
+  }
+
+  useEffect(() => { loadRateCards(); }, []);
+
+  // Carriers activos para el selector de "a quien pertenece este tarifario"
+  useEffect(() => {
+    async function loadCarriers() {
+      const { data } = await supabase
+        .from('carriers')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      setCarriers(data || []);
+    }
+    loadCarriers();
   }, []);
+
+  function validateAndSetFile(f) {
+    const ext = f.name.split('.').pop().toLowerCase();
+    if (ext !== 'xlsx') {
+      setUploadError('Solo se aceptan archivos Excel (.xlsx). Descarga la plantilla de arriba.');
+      return;
+    }
+    setUploadError('');
+    setFile(f);
+  }
+
+  async function handleUploadSubmit() {
+    if (!file || !selectedCarrierId) return;
+    setUploadStatus('loading');
+    setUploadError('');
+    setUploadResult(null);
+
+    try {
+      const carrier = carriers.find(c => c.id === selectedCarrierId);
+      const formData = new FormData();
+      formData.append('data', file);
+      formData.append('carrierId', selectedCarrierId);
+      formData.append('carrierName', carrier?.name || '');
+      formData.append('uploadedByEmail', user?.email || '');
+      formData.append('uploadedAt', new Date().toISOString());
+
+      const res = await fetch(TARIFARIO_WEBHOOK_URL, { method: 'POST', body: formData });
+      if (!res.ok) throw new Error(`Server responded ${res.status}`);
+      const data = await res.json();
+      setUploadResult(data);
+      setUploadStatus('success');
+      setFile(null);
+      setSelectedCarrierId('');
+      loadRateCards();
+    } catch (e) {
+      setUploadError('No se pudo conectar con FRIA. Intenta de nuevo.');
+      setUploadStatus('error');
+    }
+  }
 
   useEffect(() => {
     async function loadLanes() {
@@ -175,29 +236,76 @@ export default function RateCardsPage() {
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                 Formato estándar para cargar tarifas por ruta y equipo.
               </div>
-              <button disabled title="Disponible próximamente" style={{
+              <a href="/templates/FRIA_Plantilla_Tarifario.xlsx" download style={{
                 alignSelf: 'flex-start', height: '38px', padding: '0 18px', borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--border-input)', background: 'none', color: 'var(--text-primary)',
-                fontSize: '13px', fontWeight: 600, cursor: 'not-allowed', fontFamily: 'var(--font)', opacity: 0.6,
+                fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)',
+                display: 'flex', alignItems: 'center', textDecoration: 'none',
               }}>
                 Descargar plantilla
-              </button>
+              </a>
             </div>
 
-            <div
-              onDragOver={e => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={e => { e.preventDefault(); setDragging(false); }}
-              title="Disponible próximamente — todavía no existe el flujo de ingesta"
-              style={{
-                border: `2px dashed ${dragging ? 'var(--accent-primary)' : 'rgba(46,91,168,.35)'}`,
-                borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '24px',
-                background: 'var(--bg-panel)', cursor: 'not-allowed',
-              }}
-            >
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Arrastra tu tarifario aquí</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>.xlsx · hasta 10MB · próximamente</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <select value={selectedCarrierId} onChange={e => setSelectedCarrierId(e.target.value)} style={{
+                height: '38px', borderRadius: 'var(--radius-md)', background: 'var(--bg-card)',
+                border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px',
+                color: 'var(--text-primary)', fontFamily: 'var(--font)',
+              }}>
+                <option value="">Selecciona el carrier de este tarifario…</option>
+                {carriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+
+              <div
+                onDragOver={e => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={e => {
+                  e.preventDefault(); setDragging(false);
+                  if (e.dataTransfer.files[0]) validateAndSetFile(e.dataTransfer.files[0]);
+                }}
+                onClick={() => document.getElementById('tarifario-file-input').click()}
+                style={{
+                  border: `2px dashed ${dragging ? 'var(--accent-primary)' : 'rgba(46,91,168,.35)'}`,
+                  borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '20px',
+                  background: 'var(--bg-panel)', cursor: 'pointer',
+                }}
+              >
+                <input id="tarifario-file-input" type="file" accept=".xlsx" style={{ display: 'none' }}
+                  onChange={e => e.target.files[0] && validateAndSetFile(e.target.files[0])} />
+                {file ? (
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{file.name}</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Arrastra tu tarifario aquí</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>.xlsx · hasta 10MB</div>
+                  </>
+                )}
+              </div>
+
+              {uploadError && <div style={{ fontSize: '12px', color: 'var(--alert-text)' }}>{uploadError}</div>}
+
+              <button
+                onClick={handleUploadSubmit}
+                disabled={!file || !selectedCarrierId || uploadStatus === 'loading'}
+                title={!selectedCarrierId ? 'Selecciona un carrier primero' : ''}
+                style={{
+                  alignSelf: 'flex-start', height: '38px', padding: '0 18px', borderRadius: 'var(--radius-md)',
+                  background: (file && selectedCarrierId) ? 'var(--accent-primary)' : 'var(--border-input)',
+                  color: (file && selectedCarrierId) ? '#FFFFFF' : 'var(--text-secondary)', border: 'none',
+                  fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font)',
+                  cursor: (file && selectedCarrierId && uploadStatus !== 'loading') ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {uploadStatus === 'loading' ? 'Subiendo…' : 'Subir tarifario'}
+              </button>
+
+              {uploadStatus === 'success' && uploadResult && (
+                <div style={{ fontSize: '12px', color: 'var(--success-text)' }}>
+                  {uploadResult.inserted} tarifas cargadas.
+                  {uploadResult.skipped?.length > 0 && ` ${uploadResult.skipped.length} columna(s) de equipo no reconocidas — revisa el nombre.`}
+                </div>
+              )}
             </div>
           </div>
 
