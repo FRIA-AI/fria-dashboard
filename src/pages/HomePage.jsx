@@ -82,10 +82,13 @@ export default function HomePage({ user }) {
       });
       const avgTime = countWithResponse ? totalMinutes / countWithResponse : null;
 
-      // Accuracy FRAI -- metrica global del modelo, no depende del tenant
+      // Accuracy FRAI -- metrica global del modelo, no depende del tenant.
+      // Solo se lee si is_publishable=true -- evita mostrar un numero poco
+      // confiable calculado con muy pocos datos.
       const { data: reliability } = await supabase
         .from('frai_reliability')
         .select('accuracy_rate_pct, calculated_at')
+        .eq('is_publishable', true)
         .order('calculated_at', { ascending: false })
         .limit(1);
       const accuracy = reliability && reliability[0] ? Number(reliability[0].accuracy_rate_pct) : null;
