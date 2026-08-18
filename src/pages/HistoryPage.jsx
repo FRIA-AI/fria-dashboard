@@ -6,6 +6,7 @@ const STATUS_MAP = {
   rfq_sent: { label: 'RFQs enviados', bg: '#E6EEFB', color: 'var(--accent-primary)' },
   responses_received: { label: 'Respuestas recibidas', bg: '#E6EEFB', color: 'var(--accent-primary)' },
   analysis_ready: { label: 'Análisis listo', bg: 'var(--success-bg)', color: 'var(--success-text)' },
+  quoted: { label: 'Cotizado', bg: '#FFF4E5', color: '#B36B00' },
   sold: { label: 'Vendida', bg: 'var(--success-bg)', color: 'var(--success-text)' },
   cancelled: { label: 'Cancelada', bg: 'var(--alert-bg)', color: 'var(--alert-text)' },
 };
@@ -139,6 +140,15 @@ const ORIGIN_BADGE = {
 const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState(quote.status);
+  const [marking, setMarking] = useState(false);
+
+  async function handleMarkAsSold() {
+    setMarking(true);
+    const { error } = await supabase.from('quotes').update({ status: 'sold' }).eq('id', quote.id);
+    if (!error) setStatus('sold');
+    setMarking(false);
+  }
 
   useEffect(() => {
     async function load() {
@@ -196,31 +206,46 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
 
       {quote.sell_price != null && (
         <div style={{
-          background: 'var(--success-bg)', border: '1px solid var(--success-text)', borderRadius: 'var(--radius-lg)',
+          background: status === 'sold' ? 'var(--success-bg)' : '#FFF4E5',
+          border: `1px solid ${status === 'sold' ? 'var(--success-text)' : '#B36B00'}`,
+          borderRadius: 'var(--radius-lg)',
           padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--success-text)' }}>
-              Venta registrada · ${Number(quote.sell_price).toLocaleString()} MXN
+            <div style={{ fontSize: '13px', fontWeight: 700, color: status === 'sold' ? 'var(--success-text)' : '#B36B00' }}>
+              {status === 'sold' ? 'Venta cerrada' : 'Cotizado'} · ${Number(quote.sell_price).toLocaleString()} MXN
             </div>
             {quote.sell_pdf_generated_at && (
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                Generada el {new Date(quote.sell_pdf_generated_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {status === 'sold' ? 'Cotización generada' : 'Ofertada'} el {new Date(quote.sell_pdf_generated_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {status !== 'sold' && ' · el embarque todavía no está confirmado como cerrado'}
               </div>
             )}
           </div>
-          {quote.sell_pdf_url ? (
-            <a href={quote.sell_pdf_url} target="_blank" rel="noopener noreferrer" style={{
-              height: '36px', padding: '0 16px', borderRadius: 'var(--radius-md)',
-              background: 'var(--accent-primary)', color: '#FFFFFF', textDecoration: 'none',
-              fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font)',
-              display: 'flex', alignItems: 'center',
-            }}>
-              Descargar PDF
-            </a>
-          ) : (
-            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>PDF no disponible</span>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {status !== 'sold' && (
+              <button onClick={handleMarkAsSold} disabled={marking} style={{
+                height: '36px', padding: '0 14px', borderRadius: 'var(--radius-md)',
+                background: 'var(--success-text)', color: '#FFFFFF', border: 'none',
+                fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font)',
+                cursor: marking ? 'default' : 'pointer', opacity: marking ? 0.7 : 1, whiteSpace: 'nowrap',
+              }}>
+                {marking ? 'Guardando…' : 'Marcar como vendido'}
+              </button>
+            )}
+            {quote.sell_pdf_url ? (
+              <a href={quote.sell_pdf_url} target="_blank" rel="noopener noreferrer" style={{
+                height: '36px', padding: '0 16px', borderRadius: 'var(--radius-md)',
+                background: 'var(--accent-primary)', color: '#FFFFFF', textDecoration: 'none',
+                fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font)',
+                display: 'flex', alignItems: 'center', whiteSpace: 'nowrap',
+              }}>
+                Descargar PDF
+              </a>
+            ) : (
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>PDF no disponible</span>
+            )}
+          </div>
         </div>
       )}
 
