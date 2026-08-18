@@ -47,6 +47,7 @@ export default function RateCardsPage({ user }) {
 
   const [carriers, setCarriers] = useState([]);
   const [selectedCarrierId, setSelectedCarrierId] = useState('');
+  const [geography, setGeography] = useState('domestic_mx');
   const [file, setFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState('idle'); // idle | loading | success | error
   const [uploadResult, setUploadResult] = useState(null);
@@ -125,9 +126,11 @@ export default function RateCardsPage({ user }) {
       formData.append('data', file);
       formData.append('carrierId', selectedCarrierId);
       formData.append('carrierName', carrier?.name || '');
-            formData.append('uploadedByEmail', user?.email || '');
+      formData.append('uploadedByEmail', user?.email || '');
       formData.append('uploaderId', user?.id || '');
       formData.append('uploadedAt', new Date().toISOString());
+      formData.append('geography', geography);
+      formData.append('fileName', file.name);
 
       const res = await fetch(TARIFARIO_WEBHOOK_URL, { method: 'POST', body: formData });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
@@ -255,6 +258,16 @@ export default function RateCardsPage({ user }) {
               }}>
                 <option value="">Selecciona el carrier de este tarifario…</option>
                 {carriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+
+              <select value={geography} onChange={e => setGeography(e.target.value)} style={{
+                height: '38px', borderRadius: 'var(--radius-md)', background: 'var(--bg-card)',
+                border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px',
+                color: 'var(--text-primary)', fontFamily: 'var(--font)',
+              }}>
+                <option value="domestic_mx">Doméstico México</option>
+                <option value="cross_border">Cross Border</option>
+                <option value="domestic_usa">Doméstico USA</option>
               </select>
 
               <div
