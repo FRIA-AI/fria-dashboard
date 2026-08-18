@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { fetchMarketRate, pctVsMarket } from '../lib/frai';
+import { VsMarketPill } from '../components/FraiWidgets';
 
 function Card({ children, style }) {
   return (
@@ -30,6 +32,7 @@ export default function HomePage({ user }) {
   const [stats, setStats] = useState({ thisMonth: null, closedCount: null, avgTime: null, accuracy: null });
   const [monthly, setMonthly] = useState([]);
   const [activity, setActivity] = useState([]);
+  const [marketRoutes, setMarketRoutes] = useState([]);
 
   useEffect(() => {
     async function load() {
@@ -118,6 +121,29 @@ export default function HomePage({ user }) {
         title: 'Cotización enviada',
         detail: `${q.origin_city} → ${q.destination_city} · ${timeAgo(q.created_at)}`,
       })));
+
+      // Tus rutas vs mercado -- mejor costo propio por ruta+equipo (ultimos
+      // 90 dias), comparado contra la mediana de FRAI de esa misma ruta.
+      const ninetyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+      const recentQuotes = quotes.filter(q => new Date(q.created_at) >= ninetyDaysAgo);
+      const byLane = {};
+      recentQuotes.forEach(q => {
+        const key = `${q.origin_city}|${q.destination_city}|${q.equipment_type}`;
+        const rates = (rfqsByQuote[q.id] || [])
+          .filter(r => r.status === 'responded' && r.quoted_rate)
+          .map(r => Number(r.quoted_rate));
+        if (!rates.length) return;
+        const best = Math.min(...rates);
+        if (!byLane[key] || best < byLane[key].bestPrice) {
+          byLane[key] = { origin_city: q.origin_city, destination_city: q.destination_city, equipment_type: q.equipment_type, bestPrice: best };
+        }
+      });
+      const topLanes = Object.values(byLane).slice(0, 5);
+      const withMarket = await Promise.all(topLanes.map(async lane => {
+        const market = await fetchMarketRate(supabase, lane.origin_city, lane.destination_city, lane.equipment_type);
+        return { ...lane, market };
+      }));
+      setMarketRoutes(withMarket);
 
       setLoading(false);
     }
@@ -214,6 +240,38 @@ export default function HomePage({ user }) {
               )}
             </Card>
           </div>
+
+          {marketRoutes.length > 0 && (
+            <Card style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Tus rutas vs mercado</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 0.9fr', padding: '0 4px', fontSize: '11px', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+                <div>Ruta</div><div>Tu mejor costo</div><div>Mediana mercado</div><div>Diferencia</div><div>Datos</div>
+              </div>
+              {marketRoutes.map((r, i) => {
+                const equipLabel = (r.equipment_type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                const pct = r.market ? pctVsMarket(r.bestPrice, r.market.frai_value) : null;
+                return (
+                  <div key={i} style={{
+                    display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 0.9fr', padding: '10px 4px',
+                    borderTop: '1px solid var(--border-card)', fontSize: '13px', alignItems: 'center',
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{r.origin_city} → {r.destination_city}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{equipLabel}</div>
+                    </div>
+                    <div style={{ fontFamily: 'var(--mono)' }}>${r.bestPrice.toLocaleString()}</div>
+                    <div style={{ fontFamily: 'var(--mono)', color: 'var(--text-secondary)' }}>
+                      {r.market ? `$${Number(r.market.frai_value).toLocaleString()}` : '—'}
+                    </div>
+                    <div><VsMarketPill pct={pct} /></div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      {r.market?.sources ? `${r.market.sources.point_count} · ${r.market.sources.tenant_count}f` : 'Sin mercado'}
+                    </div>
+                  </div>
+                );
+              })}
+            </Card>
+          )}
         </>
       )}
     </div>
