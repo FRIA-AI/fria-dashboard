@@ -128,7 +128,7 @@ export default function App() {
         {activeTab === 'home'      && <HomePage user={user} setActiveTab={setActiveTab} />}
         {activeTab === 'rfq'       && <RFQPage user={user} onSellQuote={goToSellQuote} result={rfqResult} setResult={setRfqResult} />}
         {activeTab === 'history'   && <HistoryPage user={user} onSellQuote={goToSellQuote} />}
-        {activeTab === 'metrics'   && <MetricsPage user={user} />}
+                {activeTab === 'metrics'   && <MetricsPage user={user} />}
         {activeTab === 'market-intel' && <MarketIntelligencePage user={user} />}
         {activeTab === 'chat'      && <ChatPage user={user} />}
         {activeTab === 'ratecards' && <RateCardsPage user={user} />}
