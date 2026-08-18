@@ -125,7 +125,8 @@ export default function RateCardsPage({ user }) {
       formData.append('data', file);
       formData.append('carrierId', selectedCarrierId);
       formData.append('carrierName', carrier?.name || '');
-      formData.append('uploadedByEmail', user?.email || '');
+            formData.append('uploadedByEmail', user?.email || '');
+      formData.append('uploaderId', user?.id || '');
       formData.append('uploadedAt', new Date().toISOString());
 
       const res = await fetch(TARIFARIO_WEBHOOK_URL, { method: 'POST', body: formData });
