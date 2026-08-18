@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { saveRFQ } from '../store';
 import { supabase } from '../supabaseClient';
+import { fetchMarketRate, pctVsMarket } from '../lib/frai';
+import { VsMarketPill, SourcesBadge } from '../components/FraiWidgets';
 
 const N8N_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook-test/fd5bb4ce-a3d1-44e7-986d-c9e84aae3391';
 
@@ -297,6 +299,24 @@ const SOURCE_BADGE = {
 function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
   const comparison = result.comparison || [];
   const cheapest = comparison.find(c => c.price != null);
+  const [market, setMarket] = useState(null); // null = cargando o sin dato para esta ruta+equipo
+
+  useEffect(() => {
+    let active = true;
+    async function loadMarket() {
+      const n = result.normalized;
+      if (!n) { setMarket(null); return; }
+      const m = await fetchMarketRate(supabase, n.origin_city, n.destination_city, n.equipment_type);
+      if (active) setMarket(m);
+    }
+    loadMarket();
+    return () => { active = false; };
+  }, [result.normalized?.origin_city, result.normalized?.destination_city, result.normalized?.equipment_type]);
+
+  const anyAboveMarket = market && comparison.some(c => {
+    const pct = pctVsMarket(c.price, market.frai_value);
+    return pct != null && pct > 5;
+  });
 
   function handleSellQuote(c) {
     if (!onSellQuote) return;
@@ -329,10 +349,41 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
             </span>
           )}
         </div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          {result.rfqId} · enviado {timeAgo(new Date().toISOString())}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {market && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', borderRadius: '999px',
+              background: 'var(--bg-panel)', border: '1px solid rgba(46,91,168,.28)',
+            }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--accent-primary)' }}>
+                Mercado FRAI
+              </span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                ${Number(market.frai_value).toLocaleString()}
+              </span>
+            </div>
+          )}
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>
+            {result.rfqId} · enviado {timeAgo(new Date().toISOString())}
+          </div>
         </div>
       </div>
+
+      {anyAboveMarket && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '14px 16px',
+          borderRadius: 'var(--radius-lg)', background: '#FDF6E7', border: '1px solid rgba(185,138,32,.4)',
+        }}>
+          <span style={{
+            width: '18px', height: '18px', borderRadius: '5px', background: '#B98A20', color: '#FFF',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, flexShrink: 0,
+          }}>!</span>
+          <span style={{ fontSize: '12px', color: '#5A4413', lineHeight: 1.5 }}>
+            Uno o más carriers cotizaron más de 5% arriba de la mediana de mercado (${Number(market.frai_value).toLocaleString()})
+            para esta ruta y equipo — con base en <SourcesBadge pointCount={market.sources?.point_count} tenantCount={market.sources?.tenant_count} />.
+          </span>
+        </div>
+      )}
 
       {comparison.length === 0 ? (
         <div style={{
@@ -381,6 +432,11 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
                 }}>
                   {c.price != null ? `$${c.price.toLocaleString()}` : '—'}
                 </div>
+                {market && (
+                  <div style={{ minWidth: '70px', textAlign: 'center' }}>
+                    <VsMarketPill pct={pctVsMarket(c.price, market.frai_value)} />
+                  </div>
+                )}
                 {c.price != null && (
                   <button
                     onClick={() => handleSellQuote(c)}
