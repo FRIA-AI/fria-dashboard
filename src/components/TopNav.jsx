@@ -11,7 +11,8 @@ export const NAV = [
   { id: 'history',   label: 'Historial',  roles: ['admin', 'sales', 'pricing'] },
   { id: 'ratecards', label: 'Tarifarios', roles: ['admin', 'pricing'] },
   { id: 'carriers',  label: 'Carriers',   roles: ['admin'] },
-  { id: 'metrics',   label: 'Métricas',   roles: ['admin', 'readonly'] },
+    { id: 'metrics',   label: 'Métricas',   roles: ['admin', 'readonly'] },
+  { id: 'market-intel', label: 'Inteligencia de Mercado', roles: ['admin', 'sales', 'pricing', 'readonly'] },
   { id: 'chat',      label: 'Chat',       roles: ['admin'] },
 ];
 
