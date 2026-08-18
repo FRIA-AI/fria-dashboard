@@ -485,7 +485,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
           sell_currency: currency,
           sell_pdf_generated_at: new Date().toISOString(),
           sell_pdf_url: pdfUrl,
-          status: 'sold',
+          status: 'quoted',
         })
         .eq('id', context.quoteId);
       setSaving(false);
