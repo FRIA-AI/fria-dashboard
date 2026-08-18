@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage';
 import RFQPage from './pages/RFQPage';
 import HistoryPage from './pages/HistoryPage';
 import MetricsPage from './pages/MetricsPage';
+import MarketIntelligencePage from './pages/MarketIntelligencePage';
 import ChatPage from './pages/ChatPage';
 import RateCardsPage from './pages/RateCardsPage';
 import CarriersPage from './pages/CarriersPage';
@@ -128,6 +129,7 @@ export default function App() {
         {activeTab === 'rfq'       && <RFQPage user={user} onSellQuote={goToSellQuote} result={rfqResult} setResult={setRfqResult} />}
         {activeTab === 'history'   && <HistoryPage user={user} onSellQuote={goToSellQuote} />}
         {activeTab === 'metrics'   && <MetricsPage user={user} />}
+        {activeTab === 'market-intel' && <MarketIntelligencePage user={user} />}
         {activeTab === 'chat'      && <ChatPage user={user} />}
         {activeTab === 'ratecards' && <RateCardsPage user={user} />}
         {activeTab === 'carriers'  && <CarriersPage user={user} />}
