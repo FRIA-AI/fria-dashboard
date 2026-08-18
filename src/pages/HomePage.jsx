@@ -27,7 +27,7 @@ const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'S
 
 export default function HomePage({ user }) {
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ thisMonth: null, savings: null, avgTime: null, accuracy: null });
+  const [stats, setStats] = useState({ thisMonth: null, closedCount: null, avgTime: null, accuracy: null });
   const [monthly, setMonthly] = useState([]);
   const [activity, setActivity] = useState([]);
 
@@ -40,7 +40,7 @@ export default function HomePage({ user }) {
 
       const { data: quotesData } = await supabase
         .from('quotes')
-        .select('id, origin_city, destination_city, created_at')
+        .select('id, origin_city, destination_city, created_at, status')
         .eq('requested_by', user.tenantUserId)
         .gte('created_at', sixMonthsAgo.toISOString())
         .order('created_at', { ascending: false });
@@ -64,19 +64,11 @@ export default function HomePage({ user }) {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const thisMonthQuotes = quotes.filter(q => new Date(q.created_at) >= startOfMonth);
 
-      // Ahorro estimado -- spread entre la tarifa mas alta y la mas baja cotizada,
-      // sumado en las cotizaciones de este mes con 2+ respuestas.
-      let savings = 0;
-      let hasSavingsData = false;
-      thisMonthQuotes.forEach(q => {
-        const rates = (rfqsByQuote[q.id] || [])
-          .filter(r => r.status === 'responded' && r.quoted_rate)
-          .map(r => Number(r.quoted_rate));
-        if (rates.length >= 2) {
-          savings += Math.max(...rates) - Math.min(...rates);
-          hasSavingsData = true;
-        }
-      });
+      // Cotizaciones cerradas -- conteo real de status='sold' este mes, no un
+      // estimado calculado. El cambio manual a 'sold' lo hace el vendedor
+      // desde Historial cuando el embarque realmente se concreta (status
+      // 'quoted' es solo que se genero el PDF de venta, no que ya cerro).
+      const closedCount = thisMonthQuotes.filter(q => q.status === 'sold').length;
 
       // Tiempo promedio hasta la primera respuesta, cotizaciones de este mes
       let totalMinutes = 0, countWithResponse = 0;
@@ -100,7 +92,7 @@ export default function HomePage({ user }) {
 
       setStats({
         thisMonth: thisMonthQuotes.length,
-        savings: hasSavingsData ? savings : null,
+        closedCount,
         avgTime,
         accuracy,
       });
@@ -135,9 +127,9 @@ export default function HomePage({ user }) {
 
   const STATS_DISPLAY = [
     { label: 'Cotizaciones este mes', value: stats.thisMonth ?? '—' },
-    { label: 'Ahorro estimado', value: stats.savings != null ? `$${Math.round(stats.savings).toLocaleString()}` : '—' },
+    { label: 'Cotizaciones cerradas', value: stats.closedCount ?? '—', success: true },
     { label: 'Tiempo promedio 1ª respuesta', value: stats.avgTime != null ? `${Math.round(stats.avgTime)} min` : '—' },
-    { label: 'Accuracy FRAI', value: stats.accuracy != null ? `${stats.accuracy}%` : '—', success: true },
+    { label: 'Accuracy FRAI', value: stats.accuracy != null ? `${stats.accuracy}%` : '—' },
   ];
 
   return (
