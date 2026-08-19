@@ -75,34 +75,20 @@ export default function RateCardsPage({ user }) {
 
   async function loadRateCards() {
     setLoading(true);
-    const { data: rateCards, error } = await supabase
-      .from('rate_cards')
-      .select('carrier_id, ingestion_status, created_at');
+    // Agregado directo en la base via RPC -- antes traia TODAS las filas
+    // crudas al navegador y las agrupaba en JS, lo cual se topaba
+    // silenciosamente con el limite de 1000 filas de Supabase en cuanto
+    // rate_cards crecio mas alla de eso.
+    const { data, error } = await supabase.rpc('rate_cards_summary');
 
-    if (error || !rateCards) { setLoading(false); return; }
+    if (error || !data) { setLoading(false); return; }
 
-    const carrierIds = [...new Set(rateCards.map(r => r.carrier_id).filter(Boolean))];
-    let namesById = {};
-    if (carrierIds.length) {
-      const { data: carriersData } = await supabase
-        .from('carriers')
-        .select('id, name')
-        .in('id', carrierIds);
-      (carriersData || []).forEach(c => { namesById[c.id] = c.name; });
-    }
-
-    const grouped = {};
-    rateCards.forEach(r => {
-      const key = r.carrier_id || 'sin_carrier';
-      if (!grouped[key]) {
-        grouped[key] = { carrier: namesById[r.carrier_id] || 'Sin carrier', total: 0, errors: 0, lastDate: null };
-      }
-      grouped[key].total += 1;
-      if (r.ingestion_status === 'error') grouped[key].errors += 1;
-      if (!grouped[key].lastDate || r.created_at > grouped[key].lastDate) grouped[key].lastDate = r.created_at;
-    });
-
-    setRows(Object.values(grouped));
+    setRows(data.map(r => ({
+      carrier: r.carrier_name || 'Sin carrier',
+      total: Number(r.total),
+      errors: Number(r.errors),
+      lastDate: r.last_date,
+    })));
     setLoading(false);
   }
 
