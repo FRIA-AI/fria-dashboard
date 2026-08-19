@@ -47,7 +47,24 @@ export default function RateCardsPage({ user }) {
 
   const [carriers, setCarriers] = useState([]);
   const [selectedCarrierId, setSelectedCarrierId] = useState('');
-  const [geography, setGeography] = useState('domestic_mx');
+  const [geography, setGeography] = useState('');
+  const selectedCarrier = carriers.find(c => c.id === selectedCarrierId);
+  const carrierGeographies = selectedCarrier?.geographies || [];
+
+  // Al cambiar de carrier, la geografia se deriva de lo que ese carrier
+  // cubre realmente -- si solo maneja una, se autoselecciona; si maneja
+  // varias, se limpia para que el usuario elija entre esas (nada mas).
+  useEffect(() => {
+    if (carrierGeographies.length === 1) setGeography(carrierGeographies[0]);
+    else setGeography('');
+  }, [selectedCarrierId]);
+
+  const GEOGRAPHY_LABELS = {
+    domestic_mx: 'Doméstico México',
+    cross_border: 'Cross Border',
+    domestic_usa: 'Doméstico USA',
+  };
+
   const [file, setFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState('idle'); // idle | loading | success | error
   const [uploadResult, setUploadResult] = useState(null);
@@ -91,12 +108,14 @@ export default function RateCardsPage({ user }) {
 
   useEffect(() => { loadRateCards(); }, []);
 
-  // Carriers activos para el selector de "a quien pertenece este tarifario"
+  // Carriers activos para el selector de "a quien pertenece este tarifario",
+  // incluyendo su(s) geografia(s) real(es) -- la geografia de la carga se
+  // deriva de esto, no de una lista generica desconectada del carrier.
   useEffect(() => {
     async function loadCarriers() {
       const { data } = await supabase
         .from('carriers')
-        .select('id, name')
+        .select('id, name, geographies')
         .eq('is_active', true)
         .order('name', { ascending: true });
       setCarriers(data || []);
@@ -115,7 +134,7 @@ export default function RateCardsPage({ user }) {
   }
 
   async function handleUploadSubmit() {
-    if (!file || !selectedCarrierId) return;
+    if (!file || !selectedCarrierId || !geography) return;
     setUploadStatus('loading');
     setUploadError('');
     setUploadResult(null);
@@ -130,7 +149,7 @@ export default function RateCardsPage({ user }) {
       formData.append('uploaderId', user?.id || '');
       formData.append('uploadedAt', new Date().toISOString());
       formData.append('geography', geography);
-            formData.append('originalFileName', file.name);
+      formData.append('originalFileName', file.name);
 
       const res = await fetch(TARIFARIO_WEBHOOK_URL, { method: 'POST', body: formData });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
@@ -260,15 +279,28 @@ export default function RateCardsPage({ user }) {
                 {carriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
 
-              <select value={geography} onChange={e => setGeography(e.target.value)} style={{
-                height: '38px', borderRadius: 'var(--radius-md)', background: 'var(--bg-card)',
-                border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px',
-                color: 'var(--text-primary)', fontFamily: 'var(--font)',
-              }}>
-                <option value="domestic_mx">Doméstico México</option>
-                <option value="cross_border">Cross Border</option>
-                <option value="domestic_usa">Doméstico USA</option>
-              </select>
+              {selectedCarrierId && carrierGeographies.length === 0 && (
+                <div style={{ fontSize: '12px', color: 'var(--alert-text)' }}>
+                  Este carrier no tiene ninguna geografía configurada — agrégala en Carriers antes de subir su tarifario.
+                </div>
+              )}
+
+              {selectedCarrierId && carrierGeographies.length === 1 && (
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Geografía: <strong style={{ color: 'var(--text-primary)' }}>{GEOGRAPHY_LABELS[carrierGeographies[0]] || carrierGeographies[0]}</strong>
+                </div>
+              )}
+
+              {selectedCarrierId && carrierGeographies.length > 1 && (
+                <select value={geography} onChange={e => setGeography(e.target.value)} style={{
+                  height: '38px', borderRadius: 'var(--radius-md)', background: 'var(--bg-card)',
+                  border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px',
+                  color: 'var(--text-primary)', fontFamily: 'var(--font)',
+                }}>
+                  <option value="">Este tarifario es para qué geografía…</option>
+                  {carrierGeographies.map(g => <option key={g} value={g}>{GEOGRAPHY_LABELS[g] || g}</option>)}
+                </select>
+              )}
 
               <div
                 onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) validateAndSetFile(f); }}
@@ -289,14 +321,14 @@ export default function RateCardsPage({ user }) {
                     <div style={{ display: 'flex', gap: '10px' }}>
                       <button
                         onClick={e => { e.stopPropagation(); handleUploadSubmit(); }}
-                        disabled={!selectedCarrierId || uploadStatus === 'loading'}
-                        title={!selectedCarrierId ? 'Selecciona un carrier primero' : ''}
+                        disabled={!selectedCarrierId || !geography || uploadStatus === 'loading'}
+                        title={!selectedCarrierId ? 'Selecciona un carrier primero' : !geography ? 'Selecciona la geografía de este tarifario' : ''}
                         style={{
                           height: '36px', padding: '0 16px', borderRadius: 'var(--radius-md)',
-                          background: selectedCarrierId ? 'var(--accent-primary)' : 'var(--border-input)',
-                          color: selectedCarrierId ? '#FFFFFF' : 'var(--text-secondary)', border: 'none',
+                          background: selectedCarrierId && geography ? 'var(--accent-primary)' : 'var(--border-input)',
+                          color: selectedCarrierId && geography ? '#FFFFFF' : 'var(--text-secondary)', border: 'none',
                           fontSize: '12px', fontWeight: 700, fontFamily: 'var(--font)',
-                          cursor: selectedCarrierId && uploadStatus !== 'loading' ? 'pointer' : 'not-allowed',
+                          cursor: selectedCarrierId && geography && uploadStatus !== 'loading' ? 'pointer' : 'not-allowed',
                         }}
                       >
                         {uploadStatus === 'loading' ? 'Subiendo…' : 'Subir archivo'}
