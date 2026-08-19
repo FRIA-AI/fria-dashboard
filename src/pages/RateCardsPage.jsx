@@ -130,7 +130,7 @@ export default function RateCardsPage({ user }) {
       formData.append('uploaderId', user?.id || '');
       formData.append('uploadedAt', new Date().toISOString());
       formData.append('geography', geography);
-      formData.append('fileName', file.name);
+            formData.append('originalFileName', file.name);
 
       const res = await fetch(TARIFARIO_WEBHOOK_URL, { method: 'POST', body: formData });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
