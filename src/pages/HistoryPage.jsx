@@ -191,7 +191,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
   }, [quote.id, quote.origin_city, quote.destination_city, quote.equipment_type]);
 
   return (
-    <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ padding: '48px var(--page-pad-x)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div onClick={onBack} style={{ fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
         ← Historial
       </div>
@@ -253,6 +253,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
         <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
       ) : (
         <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
           <DetalleRow header cols={['Carrier', 'Origen', 'Tarifa referencia', 'RFQ', 'Tarifa cotizada', '']} />
           {rows.map((r, i) => {
             const originBadge = r.reference ? ORIGIN_BADGE[r.reference.source] : null;
@@ -313,6 +314,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
               ]} />
             );
           })}
+          </div>
         </div>
       )}
     </div>
@@ -374,7 +376,7 @@ export default function HistoryPage({ user, onSellQuote }) {
   }
 
   return (
-    <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ padding: '48px var(--page-pad-x)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>
         Historial de cotizaciones
       </div>
@@ -402,6 +404,7 @@ export default function HistoryPage({ user, onSellQuote }) {
         </div>
       ) : (
         <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
           <HistorialRow header cols={['RFQ ID', 'Ruta', 'Equipo', 'Estado', 'Monto', 'Fecha', '']} />
           {filtered.map(q => {
             const st = STATUS_MAP[q.status] || STATUS_MAP.pending;
@@ -425,6 +428,7 @@ export default function HistoryPage({ user, onSellQuote }) {
               </div>
             );
           })}
+          </div>
         </div>
       )}
     </div>
