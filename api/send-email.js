@@ -22,7 +22,7 @@ async function getValidGoogleAccessToken(tenantId) {
     .limit(1)
     .single();
 
-  if (error || !oauth) return null; // sin conexion OAuth -> cae a SMTP
+  if (error || !oauth) return null; // sin conexion OAuth -> cae a Microsoft o SMTP
 
   const expiresAt = new Date(oauth.access_token_expires_at).getTime();
   if (expiresAt - Date.now() > 60 * 1000) {
@@ -55,6 +55,56 @@ async function getValidGoogleAccessToken(tenantId) {
       status: 'active', last_error: null, updated_at: new Date().toISOString(),
     })
     .eq('tenant_id', tenantId).eq('provider', 'google');
+
+  return { accessToken: tokens.access_token, emailAddress: oauth.email_address };
+}
+
+async function getValidMicrosoftAccessToken(tenantId) {
+  const { data: oauth, error } = await supabaseAdmin
+    .from('tenant_email_oauth')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('provider', 'microsoft')
+    .eq('status', 'active')
+    .limit(1)
+    .single();
+
+  if (error || !oauth) return null; // sin conexion OAuth -> cae a SMTP
+
+  const expiresAt = new Date(oauth.access_token_expires_at).getTime();
+  if (expiresAt - Date.now() > 60 * 1000) {
+    return { accessToken: oauth.access_token, emailAddress: oauth.email_address };
+  }
+
+  const resp = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.MICROSOFT_CLIENT_ID,
+      client_secret: process.env.MICROSOFT_CLIENT_SECRET,
+      refresh_token: oauth.refresh_token,
+      grant_type: 'refresh_token',
+    }),
+  });
+  const tokens = await resp.json();
+
+  if (!resp.ok) {
+    await supabaseAdmin.from('tenant_email_oauth')
+      .update({ status: 'error', last_error: JSON.stringify(tokens), updated_at: new Date().toISOString() })
+      .eq('tenant_id', tenantId).eq('provider', 'microsoft');
+    return null;
+  }
+
+  // Microsoft a veces reemite un refresh_token nuevo en la respuesta -- si
+  // llega, hay que guardarlo, o la siguiente renovacion fallaria con el viejo.
+  await supabaseAdmin.from('tenant_email_oauth')
+    .update({
+      access_token: tokens.access_token,
+      ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
+      access_token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+      status: 'active', last_error: null, updated_at: new Date().toISOString(),
+    })
+    .eq('tenant_id', tenantId).eq('provider', 'microsoft');
 
   return { accessToken: tokens.access_token, emailAddress: oauth.email_address };
 }
@@ -92,6 +142,35 @@ async function sendViaGmailApi({ accessToken, fromDisplayName, fromEmail, to, cc
   return result;
 }
 
+async function sendViaMicrosoftGraphApi({ accessToken, fromDisplayName, to, cc, replyTo, subject, html }) {
+  const toRecipients = to.split(',').map(addr => ({ emailAddress: { address: addr.trim() } }));
+  const ccRecipients = cc ? cc.split(',').map(addr => ({ emailAddress: { address: addr.trim() } })) : [];
+  const replyToList = replyTo ? [{ emailAddress: { address: replyTo } }] : [];
+
+  const resp = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: {
+        subject,
+        body: { contentType: 'HTML', content: html },
+        toRecipients,
+        ccRecipients,
+        replyTo: replyToList,
+      },
+      saveToSentItems: true,
+    }),
+  });
+
+  // sendMail regresa 202 Accepted sin cuerpo cuando sale bien -- a
+  // diferencia de Gmail, no da un ID de mensaje de vuelta.
+  if (resp.status !== 202) {
+    const result = await resp.json().catch(() => ({}));
+    throw new Error(`Microsoft Graph send failed: ${JSON.stringify(result)}`);
+  }
+  return { id: null };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -118,10 +197,22 @@ export default async function handler(req, res) {
         fromEmail: googleAuth.emailAddress,
         to, cc, replyTo, subject, html,
       });
-      return res.status(200).json({ success: true, messageId: info.id, method: 'oauth' });
+      return res.status(200).json({ success: true, messageId: info.id, method: 'oauth_google' });
     }
 
-    // --- Sin conexion OAuth -- mismo flujo SMTP que ya tenias, sin cambios ---
+    const microsoftAuth = await getValidMicrosoftAccessToken(tenantId);
+
+    if (microsoftAuth) {
+      const displayName = await getDisplayName(tenantId, null);
+      await sendViaMicrosoftGraphApi({
+        accessToken: microsoftAuth.accessToken,
+        fromDisplayName: displayName,
+        to, cc, replyTo, subject, html,
+      });
+      return res.status(200).json({ success: true, messageId: null, method: 'oauth_microsoft' });
+    }
+
+    // --- Sin conexion OAuth (ni Google ni Microsoft) -- mismo flujo SMTP que ya tenias, sin cambios ---
     const { data: config, error: configError } = await supabaseAdmin
       .from('tenant_email_configs')
       .select('*')
