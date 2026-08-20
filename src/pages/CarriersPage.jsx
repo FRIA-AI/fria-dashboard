@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-const CARRIER_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook-test/carrier-ingestion';
+const CARRIER_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/carrier-ingestion';
 
 const GEO_LABELS = {
   domestic_mx: 'Doméstico MX',
