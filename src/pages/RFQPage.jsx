@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { fetchMarketRate, pctVsMarket } from '../lib/frai';
 import { VsMarketPill, SourcesBadge } from '../components/FraiWidgets';
 
-const N8N_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fd5bb4ce-a3d1-44e7-986d-c9e84aae3391';
+const N8N_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fria-envio-rfq';
 
 const EXAMPLES = [
   'Monterrey a Laredo, dry van, 2 unidades',
