@@ -1,0 +1,39 @@
+/* Sistema de variables responsivas para toda la app -- mismo patron que ya
+   se probo en el landing page. Los paddings/grids de cada pantalla deben
+   usar estas variables en vez de valores fijos para heredar el ajuste. */
+:root {
+  --page-pad-x: 56px;
+  --page-pad-top: var(--content-padding-top);
+  --grid-2col: 1fr 1fr;
+  --grid-3col: repeat(3, 1fr);
+  --grid-4col: repeat(4, 1fr);
+  --nav-pad-x: 40px;
+  --nav-item-fs: 13px;
+  --nav-item-gap: 26px;
+  --nav-logo-gap: 48px;
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --page-pad-x: 32px;
+    --grid-4col: repeat(2, 1fr);
+    --nav-pad-x: 24px;
+    --nav-item-gap: 18px;
+    --nav-logo-gap: 24px;
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --page-pad-x: 18px;
+    --grid-2col: 1fr;
+    --grid-3col: 1fr;
+    --grid-4col: 1fr;
+    --nav-item-fs: 12px;
+  }
+}
+
+/* El nav completo (logo + items + avatar) nunca cabe en una sola fila sin
+   scroll a partir de cierto ancho -- los items intermedios se vuelven
+   scrolleables horizontalmente, logo y avatar nunca se encogen. */
+#fria-nav-items::-webkit-scrollbar { height: 0; width: 0; }
