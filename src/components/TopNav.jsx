@@ -69,38 +69,40 @@ export default function TopNav({ user, activeTab, setActiveTab, isFriaStaff }) {
     <header style={{
       height: 'var(--nav-height)', background: 'var(--bg-card)',
       borderBottom: '1px solid var(--border-card)', display: 'flex',
-      alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 40px', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10,
+      alignItems: 'center', gap: '16px',
+      padding: '0 var(--nav-pad-x)', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '48px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <FriaMark />
-          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>FRIA</div>
-        </div>
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '26px' }}>
-          {visibleNav.map(item => {
-            const active = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontFamily: 'var(--font)', fontSize: '13px', fontWeight: 600,
-                  color: active ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                  padding: '4px 0',
-                  borderBottom: active ? '2px solid var(--accent-primary)' : '2px solid transparent',
-                  transition: `color var(--transition)`,
-                }}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+        <FriaMark />
+        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>FRIA</div>
       </div>
 
-      <div ref={menuRef} style={{ position: 'relative' }}>
+      <nav id="fria-nav-items" style={{
+        display: 'flex', alignItems: 'center', gap: 'var(--nav-item-gap)',
+        flex: '1 1 auto', minWidth: 0, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none',
+      }}>
+        {visibleNav.map(item => {
+          const active = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                fontFamily: 'var(--font)', fontSize: 'var(--nav-item-fs)', fontWeight: 600,
+                color: active ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                padding: '4px 0',
+                borderBottom: active ? '2px solid var(--accent-primary)' : '2px solid transparent',
+                transition: `color var(--transition)`,
+              }}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }}>
         <button
           onClick={() => setMenuOpen(o => !o)}
           style={{
