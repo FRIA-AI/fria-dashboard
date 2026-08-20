@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-const CHAT_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook-test/fria-chat';
+const CHAT_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fria-chat';
 
 function equipLabel(e) {
   return (e || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
