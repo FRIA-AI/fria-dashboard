@@ -163,7 +163,7 @@ export default function HomePage({ user }) {
 
   return (
     <div style={{
-      padding: `var(--content-padding-top) 56px var(--content-padding-bottom)`,
+      padding: `var(--content-padding-top) var(--page-pad-x) var(--content-padding-bottom)`,
       display: 'flex', flexDirection: 'column', gap: '28px',
     }}>
       <div>
@@ -179,7 +179,7 @@ export default function HomePage({ user }) {
         <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--card-gap)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-4col)', gap: 'var(--card-gap)' }}>
             {STATS_DISPLAY.map(s => (
               <Card key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
@@ -195,7 +195,7 @@ export default function HomePage({ user }) {
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--card-gap)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-2col)', gap: 'var(--card-gap)' }}>
             <Card style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Cotizaciones por mes</div>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', height: '120px', padding: '0 4px' }}>
@@ -244,7 +244,8 @@ export default function HomePage({ user }) {
           {marketRoutes.length > 0 && (
             <Card style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Tus rutas vs mercado</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 0.9fr', padding: '0 4px', fontSize: '11px', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+              <div style={{ overflowX: 'auto' }}>
+              <div style={{ minWidth: '520px', display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 0.9fr', padding: '0 4px', fontSize: '11px', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
                 <div>Ruta</div><div>Tu mejor costo</div><div>Mediana mercado</div><div>Diferencia</div><div>Datos</div>
               </div>
               {marketRoutes.map((r, i) => {
@@ -252,7 +253,7 @@ export default function HomePage({ user }) {
                 const pct = r.market ? pctVsMarket(r.bestPrice, r.market.frai_value) : null;
                 return (
                   <div key={i} style={{
-                    display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 0.9fr', padding: '10px 4px',
+                    minWidth: '520px', display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 0.9fr', padding: '10px 4px',
                     borderTop: '1px solid var(--border-card)', fontSize: '13px', alignItems: 'center',
                   }}>
                     <div>
@@ -270,6 +271,7 @@ export default function HomePage({ user }) {
                   </div>
                 );
               })}
+              </div>
             </Card>
           )}
         </>
