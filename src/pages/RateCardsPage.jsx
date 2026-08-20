@@ -37,7 +37,7 @@ const TabBar = ({ tab, setTab }) => (
   </div>
 );
 
-const TARIFARIO_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook-test/fria-tarifarios';
+const TARIFARIO_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fria-tarifarios';
 
 export default function RateCardsPage({ user }) {
   const [tab, setTab] = useState('Tarifarios');
