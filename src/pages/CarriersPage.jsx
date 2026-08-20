@@ -94,10 +94,10 @@ export default function CarriersPage({ user }) {
   }
 
   return (
-    <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
+    <div style={{ padding: '48px var(--page-pad-x)', display: 'flex', flexDirection: 'column', gap: '22px' }}>
       <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Carriers</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-2col)', gap: '20px' }}>
         <div style={{
           background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
           padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px',
@@ -169,7 +169,7 @@ export default function CarriersPage({ user }) {
       {status === 'success' && result && (
         <div style={{
           background: 'var(--success-bg)', border: '1px solid var(--success-text)', borderRadius: 'var(--radius-lg)',
-          padding: '18px 22px', display: 'flex', gap: '32px',
+          padding: '18px 22px', display: 'flex', gap: '32px', flexWrap: 'wrap',
         }}>
           <div>
             <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: 'var(--success-text)' }}>{result.inserted}</div>
@@ -190,6 +190,7 @@ export default function CarriersPage({ user }) {
         <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
       ) : (
         <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
           <CRow header cols={['Carrier', 'Servicio', 'Equipo', 'Correo']} />
           {carriers.map(c => (
             <CRow key={c.id} cols={[
@@ -199,6 +200,7 @@ export default function CarriersPage({ user }) {
               <span key="m" style={{ fontFamily: 'var(--mono)', color: 'var(--text-secondary)' }}>{c.email || '—'}</span>,
             ]} />
           ))}
+          </div>
         </div>
       )}
     </div>
