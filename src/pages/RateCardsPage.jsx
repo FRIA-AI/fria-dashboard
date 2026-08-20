@@ -199,9 +199,9 @@ export default function RateCardsPage({ user }) {
 
       {tab === 'Rutas' ? (
         loadingLanes ? (
-          <div style={{ padding: '36px 56px', fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
+          <div style={{ padding: '36px var(--page-pad-x)', fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
         ) : (
-          <div style={{ padding: '36px 56px 48px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ padding: '36px var(--page-pad-x) 48px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{
               fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, background: 'var(--bg-card)',
               border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)', padding: '14px 18px',
@@ -219,6 +219,7 @@ export default function RateCardsPage({ user }) {
               </div>
             ) : (
               <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
                 <TRow header cols={['Ruta', 'Equipo', '# Cotizaciones', 'Tarifa mín–máx observada']} widths="1.6fr 1fr 1fr 1.4fr" />
                 {lanes.map((l, i) => (
                   <TRow key={i} widths="1.6fr 1fr 1fr 1.4fr" cols={[
@@ -230,13 +231,14 @@ export default function RateCardsPage({ user }) {
                     </span>,
                   ]} />
                 ))}
+                </div>
               </div>
             )}
           </div>
         )
       ) : (
-        <div style={{ padding: '36px 56px 48px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '20px' }}>
+        <div style={{ padding: '36px var(--page-pad-x) 48px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-2col)', gap: '20px' }}>
             <div style={{
               background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
               padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px',
@@ -366,6 +368,7 @@ export default function RateCardsPage({ user }) {
             </div>
           ) : (
             <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
               <TRow header cols={['Carrier', 'Rutas / errores', 'Estado', 'Cargado']} />
               {rows.map((r, i) => {
                 const st = r.errors > 0 ? STATUS_MAP.error : STATUS_MAP.processed;
@@ -386,6 +389,7 @@ export default function RateCardsPage({ user }) {
                   ]} />
                 );
               })}
+              </div>
             </div>
           )}
         </div>
