@@ -230,7 +230,7 @@ export default function RFQPage({ user, onSellQuote, result, setResult }) {
 
   return (
     <div style={{
-      padding: '56px', display: 'flex', flexDirection: 'column', gap: '24px',
+      padding: '56px var(--page-pad-x)', display: 'flex', flexDirection: 'column', gap: '24px',
       maxWidth: '820px', margin: '0 auto',
     }}>
       <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -336,10 +336,10 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
   }
 
   return (
-    <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
+    <div style={{ padding: '48px var(--page-pad-x)', display: 'flex', flexDirection: 'column', gap: '22px' }}>
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
-        padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px',
       }}>
         <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
           {result.lane || 'Solicitud enviada'}
@@ -399,12 +399,12 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
             const badge = SOURCE_BADGE[c.source];
             return (
               <div key={i} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap',
                 padding: '18px 22px', borderRadius: 'var(--radius-lg)',
                 background: isCheapest ? 'var(--success-bg)' : 'var(--bg-card)',
                 border: `1px solid ${isCheapest ? 'var(--success-text)' : 'var(--border-card)'}`,
                 opacity: c.price == null ? 0.75 : 1,
-                gap: '16px',
+                gap: '12px 16px',
               }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
