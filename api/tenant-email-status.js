@@ -13,21 +13,24 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { data: oauth, error } = await supabaseAdmin
+  // Se revisan ambos proveedores -- el tenant puede haber conectado Gmail o
+  // Outlook, nunca los dos a la vez en el flujo normal de la interfaz.
+  const { data: rows } = await supabaseAdmin
     .from('tenant_email_oauth')
-    .select('email_address, status, connected_at')
+    .select('provider, email_address, status, connected_at')
     .eq('tenant_id', tenantId)
-    .eq('provider', 'google')
-    .limit(1)
-    .single();
+    .in('provider', ['google', 'microsoft']);
 
-  if (error || !oauth || oauth.status !== 'active') {
+  const active = (rows || []).find(r => r.status === 'active');
+
+  if (!active) {
     return res.status(200).json({ connected: false });
   }
 
   return res.status(200).json({
     connected: true,
-    email: oauth.email_address,
-    connectedAt: oauth.connected_at,
+    provider: active.provider,
+    email: active.email_address,
+    connectedAt: active.connected_at,
   });
 }
