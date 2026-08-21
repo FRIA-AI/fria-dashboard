@@ -53,36 +53,28 @@ async function fetchNormalizedQuote(rfqId) {
 async function fetchComparison(quoteId, originCity, destinationCity, equipmentType) {
   console.log('[FRIA] Buscando comparativa para:', { quoteId, originCity, destinationCity, equipmentType });
 
-  const today = new Date().toISOString().slice(0, 10);
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
-  // Tarifarios vigentes en esta ruta/equipo -- match bidireccional AGRUPADO
-  // EN PARES (origen+destino juntos), no 4 condiciones sueltas.
+  // Tarifarios vigentes en esta ruta/equipo -- match bidireccional usando
+  // normalize_city() (misma funcion que ya usa FRAI), no ILIKE de texto
+  // crudo -- asi "Mexico City" y "Ciudad de Mexico" hacen match aunque no
+  // compartan ningun texto literal en comun.
   const { data: rateCardsData, error: rateCardsError } = await supabase
-    .from('rate_cards')
-    .select('carrier_id, base_rate, valid_until')
-    .eq('equipment_type', equipmentType)
-    .eq('is_active', true)
-    .or(`valid_until.is.null,valid_until.gte.${today}`)
-    .or(`and(origin_city.ilike.%${originCity}%,destination_city.ilike.%${destinationCity}%),and(origin_city.ilike.%${destinationCity}%,destination_city.ilike.%${originCity}%)`)
-    .limit(50);
+    .rpc('search_rate_cards_normalized', {
+      p_origin: originCity, p_destination: destinationCity, p_equipment_type: equipmentType,
+    });
   if (rateCardsError) console.error('[FRIA] Error en rate_cards:', rateCardsError);
   console.log('[FRIA] rate_cards encontrados:', rateCardsData);
 
   // Cotizaciones vendidas anteriores en esta ruta/equipo, ultimos 12 meses
-  // (excluyendo la cotizacion recien creada, que todavia no tiene venta)
+  // (excluyendo la cotizacion recien creada, que todavia no tiene venta) --
+  // mismo criterio de normalize_city() que arriba.
   const { data: historicalQuotes, error: historicalError } = await supabase
-    .from('quotes')
-    .select('id, sell_price, sell_currency, created_at, selected_rfq_id')
-    .neq('id', quoteId)
-    .eq('equipment_type', equipmentType)
-    .ilike('origin_city', `%${originCity}%`)
-    .ilike('destination_city', `%${destinationCity}%`)
-    .gte('created_at', twelveMonthsAgo.toISOString())
-    .not('sell_price', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(50);
+    .rpc('search_historical_quotes_normalized', {
+      p_origin: originCity, p_destination: destinationCity, p_equipment_type: equipmentType,
+      p_exclude_quote_id: quoteId, p_since: twelveMonthsAgo.toISOString(),
+    });
   if (historicalError) console.error('[FRIA] Error en quotes historicos:', historicalError);
   console.log('[FRIA] cotizaciones vendidas encontradas:', historicalQuotes);
 
