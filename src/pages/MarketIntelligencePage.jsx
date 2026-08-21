@@ -317,3 +317,4 @@ export default function MarketIntelligencePage({ user }) {
     </div>
   );
 }
+ 
