@@ -25,9 +25,23 @@ function MicrosoftMark() {
   );
 }
 
+function SmtpMark() {
+  return (
+    <div style={{
+      width: '40px', height: '40px', borderRadius: '8px', flexShrink: 0,
+      background: 'var(--bg-panel)', border: '1px solid var(--border-card)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: '16px', color: 'var(--text-secondary)',
+    }}>
+      🔑
+    </div>
+  );
+}
+
 const PROVIDERS = {
   google: { label: 'Google', markComponent: GoogleMark, connectLabel: 'Conectar con Google', startPath: '/api/auth/google/start', disconnectPath: '/api/auth/google/disconnect' },
   microsoft: { label: 'Microsoft', markComponent: MicrosoftMark, connectLabel: 'Conectar con Microsoft', startPath: '/api/auth/microsoft/start', disconnectPath: '/api/auth/microsoft/disconnect' },
+  smtp: { label: 'Usuario y contraseña', markComponent: SmtpMark },
 };
 
 const GUIDE_STEPS = {
@@ -48,11 +62,23 @@ const GUIDE_STEPS = {
 
 export default function SettingsPage() {
   const [status, setStatus] = useState('loading'); // loading | disconnected | connected | error
-  const [provider, setProvider] = useState(null); // 'google' | 'microsoft' | null
+  const [provider, setProvider] = useState(null); // 'google' | 'microsoft' | 'smtp' | null
   const [email, setEmail] = useState('');
   const [connectedAt, setConnectedAt] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [showSmtpForm, setShowSmtpForm] = useState(false);
+  const [smtpEmail, setSmtpEmail] = useState('');
+  const [smtpPassword, setSmtpPassword] = useState('');
+  const [smtpProvider, setSmtpProvider] = useState('outlook');
+  const [manualSmtpHost, setManualSmtpHost] = useState('');
+  const [manualSmtpPort, setManualSmtpPort] = useState('587');
+  const [manualSmtpSecure, setManualSmtpSecure] = useState(false);
+  const [manualImapHost, setManualImapHost] = useState('');
+  const [manualImapPort, setManualImapPort] = useState('993');
+  const [manualImapSecure, setManualImapSecure] = useState(true);
+  const [smtpSubmitting, setSmtpSubmitting] = useState(false);
+  const [smtpError, setSmtpError] = useState('');
 
   async function loadStatus() {
     setStatus('loading');
@@ -92,13 +118,51 @@ export default function SettingsPage() {
     if (!session) { setBusy(false); return; }
 
     try {
-      await fetch(PROVIDERS[provider].disconnectPath, {
+      const path = provider === 'smtp' ? '/api/disconnect-smtp' : PROVIDERS[provider].disconnectPath;
+      await fetch(path, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       await loadStatus();
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleSmtpSubmit(e) {
+    e.preventDefault();
+    setSmtpSubmitting(true);
+    setSmtpError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setSmtpSubmitting(false); return; }
+
+    try {
+      const res = await fetch('/api/connect-smtp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          provider: smtpProvider,
+          emailAddress: smtpEmail.trim(),
+          appPassword: smtpPassword,
+          manual: smtpProvider === 'other' ? {
+            smtpHost: manualSmtpHost.trim(), smtpPort: manualSmtpPort, smtpSecure: manualSmtpSecure,
+            imapHost: manualImapHost.trim(), imapPort: manualImapPort, imapSecure: manualImapSecure,
+          } : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSmtpError(data.error || 'No se pudo conectar.');
+        return;
+      }
+      setSmtpEmail('');
+      setSmtpPassword('');
+      setShowSmtpForm(false);
+      await loadStatus();
+    } catch {
+      setSmtpError('No se pudo conectar con FRIA. Intenta de nuevo.');
+    } finally {
+      setSmtpSubmitting(false);
     }
   }
 
@@ -140,10 +204,12 @@ export default function SettingsPage() {
           </div>
           <div style={{ fontSize: '14px', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
             Conecta el correo de tu empresa para que FRIA pueda enviar y leer respuestas de RFQs automáticamente.
-            Elige el que uses — Gmail/Google Workspace, u Outlook/Microsoft 365.
+            Elige Google si usas Gmail/Workspace, Microsoft si usas Outlook/M365 — y si prefieres o no puedes
+            usar esos botones, más abajo puedes conectar con usuario y contraseña para Outlook, Yahoo, Zoho, o
+            cualquier correo de dominio propio.
           </div>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            {Object.entries(PROVIDERS).map(([key, p]) => {
+            {Object.entries(PROVIDERS).filter(([key]) => key !== 'smtp').map(([key, p]) => {
               const Mark = p.markComponent;
               return (
                 <button key={key} onClick={() => handleConnect(key)} style={{
@@ -159,6 +225,153 @@ export default function SettingsPage() {
                 </button>
               );
             })}
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border-card)', paddingTop: '16px' }}>
+            <button onClick={() => setShowSmtpForm(s => !s)} style={{
+              background: 'none', border: 'none', color: 'var(--accent-primary)', fontSize: '13px',
+              fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)', padding: 0,
+            }}>
+              {showSmtpForm ? '▾ Ocultar' : '▸ ¿No puedes usar los botones de arriba? Conecta con usuario y contraseña'}
+            </button>
+
+            {showSmtpForm && (
+              <form onSubmit={handleSmtpSubmit} style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '460px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>¿Qué proveedor usas?</label>
+                  <select value={smtpProvider} onChange={e => setSmtpProvider(e.target.value)} style={{
+                    height: '42px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
+                    border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px',
+                    color: 'var(--text-primary)', fontFamily: 'var(--font)',
+                  }}>
+                    <option value="outlook">Outlook / Microsoft 365</option>
+                    <option value="yahoo">Yahoo Mail</option>
+                    <option value="zoho">Zoho Mail</option>
+                    <option value="other">Otro (correo de dominio propio)</option>
+                  </select>
+                </div>
+
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  {smtpProvider === 'outlook' && (
+                    <>
+                      <strong>No uses tu contraseña normal</strong> — usa una "contraseña de aplicación": en tu
+                      cuenta de Microsoft, ve a{' '}
+                      <a href="https://account.microsoft.com/security" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>Seguridad</a>{' '}
+                      → "Opciones de seguridad avanzadas" → "Contraseñas de aplicación" → crea una nueva, y
+                      pégala aquí. Si tu organización usa verificación en dos pasos, tu administrador de TI
+                      puede necesitar habilitar esta opción.
+                    </>
+                  )}
+                  {smtpProvider === 'yahoo' && (
+                    <>
+                      <strong>No uses tu contraseña normal</strong> — Yahoo exige una "contraseña de
+                      aplicación": ve a{' '}
+                      <a href="https://login.yahoo.com/account/security" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>Seguridad de tu cuenta</a>{' '}
+                      → "Generar contraseña de aplicación" → pégala aquí.
+                    </>
+                  )}
+                  {smtpProvider === 'zoho' && (
+                    <>
+                      <strong>No uses tu contraseña normal</strong> — en Zoho ve a{' '}
+                      <a href="https://accounts.zoho.com/home#security/app_passwords" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>Seguridad → Contraseñas de aplicación</a>{' '}
+                      → crea una nueva y pégala aquí.
+                    </>
+                  )}
+                  {smtpProvider === 'other' && (
+                    <>
+                      Para correo de dominio propio (por ejemplo, de un hosting), pídele a quien administra tu
+                      correo el servidor y puerto de SMTP e IMAP — normalmente están en la documentación de tu
+                      proveedor de hosting. Si tu correo pide verificación en dos pasos, también vas a necesitar
+                      una contraseña de aplicación en vez de tu contraseña normal.
+                    </>
+                  )}
+                </div>
+
+                <input
+                  type="email" required value={smtpEmail} onChange={e => setSmtpEmail(e.target.value)}
+                  placeholder="tucorreo@empresa.com"
+                  style={{
+                    height: '42px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
+                    border: '1px solid var(--border-input)', padding: '0 14px', fontSize: '13px',
+                    color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font)',
+                  }}
+                />
+                <input
+                  type="password" required value={smtpPassword} onChange={e => setSmtpPassword(e.target.value)}
+                  placeholder="Contraseña de aplicación"
+                  style={{
+                    height: '42px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
+                    border: '1px solid var(--border-input)', padding: '0 14px', fontSize: '13px',
+                    color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font)', letterSpacing: '.15em',
+                  }}
+                />
+
+                {smtpProvider === 'other' && (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px',
+                    background: 'var(--bg-panel)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-card)',
+                  }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                      Servidor de salida (SMTP)
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <input
+                        required value={manualSmtpHost} onChange={e => setManualSmtpHost(e.target.value)}
+                        placeholder="smtp.tuempresa.com"
+                        style={{ flex: 2, height: '38px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', border: '1px solid var(--border-input)', padding: '0 10px', fontSize: '12.5px', color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font)' }}
+                      />
+                      <input
+                        required value={manualSmtpPort} onChange={e => setManualSmtpPort(e.target.value)}
+                        placeholder="587" type="number"
+                        style={{ flex: 1, height: '38px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', border: '1px solid var(--border-input)', padding: '0 10px', fontSize: '12.5px', color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font)' }}
+                      />
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      <input type="checkbox" checked={manualSmtpSecure} onChange={e => setManualSmtpSecure(e.target.checked)} />
+                      Usa SSL/TLS directo (normalmente puerto 465 — déjalo sin marcar si usas 587)
+                    </label>
+
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', marginTop: '6px' }}>
+                      Servidor de entrada (IMAP)
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <input
+                        required value={manualImapHost} onChange={e => setManualImapHost(e.target.value)}
+                        placeholder="imap.tuempresa.com"
+                        style={{ flex: 2, height: '38px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', border: '1px solid var(--border-input)', padding: '0 10px', fontSize: '12.5px', color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font)' }}
+                      />
+                      <input
+                        required value={manualImapPort} onChange={e => setManualImapPort(e.target.value)}
+                        placeholder="993" type="number"
+                        style={{ flex: 1, height: '38px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', border: '1px solid var(--border-input)', padding: '0 10px', fontSize: '12.5px', color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font)' }}
+                      />
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      <input type="checkbox" checked={manualImapSecure} onChange={e => setManualImapSecure(e.target.checked)} />
+                      Usa SSL/TLS (casi siempre sí, déjalo marcado)
+                    </label>
+                  </div>
+                )}
+
+                {smtpError && (
+                  <div style={{
+                    background: 'var(--alert-bg)', border: '1px solid var(--alert-text)', borderRadius: 'var(--radius-md)',
+                    padding: '10px 14px', color: 'var(--alert-text)', fontSize: '12.5px',
+                  }}>
+                    {smtpError}
+                  </div>
+                )}
+
+                <button type="submit" disabled={smtpSubmitting} style={{
+                  alignSelf: 'flex-start', height: '40px', padding: '0 18px', borderRadius: 'var(--radius-md)',
+                  background: 'var(--accent-primary)', border: 'none', color: '#FFFFFF', fontSize: '13px',
+                  fontWeight: 700, cursor: smtpSubmitting ? 'default' : 'pointer', opacity: smtpSubmitting ? 0.7 : 1,
+                  fontFamily: 'var(--font)',
+                }}>
+                  {smtpSubmitting ? 'Probando conexión…' : 'Conectar'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}
