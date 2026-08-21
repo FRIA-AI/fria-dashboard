@@ -64,6 +64,9 @@ function buildQuoteHtml({ folio, cliente, vendedor, origin, destination, equipme
 
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="display:flex;align-items:center;gap:12px">
+          ${logoUrl ? `
+          <img src="${logoUrl}" alt="Logo cliente" style="max-height:40px;max-width:180px;object-fit:contain" />
+          ` : `
           <div style="display:flex;align-items:flex-end;gap:3px;height:22px">
             <div style="width:6px;height:40%;background:#0A0F1F;border-radius:1px"></div>
             <div style="width:6px;height:65%;background:#2E5BA8;border-radius:1px"></div>
@@ -75,9 +78,9 @@ function buildQuoteHtml({ folio, cliente, vendedor, origin, destination, equipme
             <div style="font-size:20px;font-weight:800;color:#0A0F1F;letter-spacing:-.01em;line-height:1">FRIA</div>
             <div style="font-size:9px;font-weight:600;color:#5C6B8A;letter-spacing:.08em;margin-top:3px">FREIGHT RATE INTELLIGENCE</div>
           </div>
+          `}
         </div>
         <div style="text-align:right">
-          ${logoUrl ? `<img src="${logoUrl}" alt="Logo cliente" style="max-height:32px;max-width:140px;object-fit:contain;margin-bottom:8px" />` : ''}
           <div style="font-size:9px;font-weight:600;color:#5C6B8A;letter-spacing:.06em;text-transform:uppercase">Fecha</div>
           <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#0A0F1F;margin-top:2px">${todayLabel()}</div>
           <div style="font-size:9px;font-weight:600;color:#5C6B8A;letter-spacing:.06em;text-transform:uppercase;margin-top:8px">Folio</div>
@@ -214,6 +217,34 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     const R = 612 - px(48);
     const W = R - L;
 
+    // Logo del cliente -- se prepara ANTES de dibujar el encabezado, para
+    // poder decidir si va el logo del cliente o la marca de FRIA a la
+    // izquierda (nunca los dos). Si el tenant no tiene logo, o si falla la
+    // descarga, cae de vuelta a la marca de FRIA -- nunca se queda vacio.
+    let clientLogo = null;
+    if (logoUrl) {
+      try {
+        const logoRes = await fetch(logoUrl);
+        const logoBuffer = await logoRes.arrayBuffer();
+        const logoB64 = await arrayBufferToBase64(logoBuffer);
+        const contentType = logoRes.headers.get('content-type') || '';
+        const format = contentType.includes('png') ? 'PNG' : 'JPEG';
+
+        const dims = await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          img.onerror = () => resolve(null);
+          img.src = `data:${contentType};base64,${logoB64}`;
+        });
+
+        if (dims) {
+          clientLogo = { dataUrl: `data:${contentType};base64,${logoB64}`, format, dims };
+        }
+      } catch (e) {
+        console.error('No se pudo descargar el logo del cliente, usando el de FRIA:', e);
+      }
+    }
+
     function gradientRect(x, yTop, w, h, colorA, colorB, direction = 'h') {
       const steps = 40;
       for (let i = 0; i < steps; i++) {
@@ -248,15 +279,25 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
 
     let y = px(48);
 
-    const markEndX = drawLogoMark(L, y - px(2), 22);
-    doc.setFont('InterExtraBold', 'bold');
-    doc.setFontSize(px(20));
-    doc.setTextColor(10, 15, 31);
-    doc.text('FRIA', markEndX + px(10), y - px(6));
-    doc.setFont('Inter', 'normal');
-    doc.setFontSize(px(9));
-    doc.setTextColor(92, 107, 138);
-    doc.text('FREIGHT RATE INTELLIGENCE', markEndX + px(10), y + px(6));
+    if (clientLogo) {
+      // El logo del cliente sustituye la marca de FRIA -- este documento lo
+      // ve el carrier/cliente final del tenant, debe verse como suyo.
+      const { dataUrl, format, dims } = clientLogo;
+      const maxW = px(140), maxH = px(40);
+      let w = maxW, h = (dims.h / dims.w) * maxW;
+      if (h > maxH) { h = maxH; w = (dims.w / dims.h) * maxH; }
+      doc.addImage(dataUrl, format, L, y - h + px(4), w, h);
+    } else {
+      const markEndX = drawLogoMark(L, y - px(2), 22);
+      doc.setFont('InterExtraBold', 'bold');
+      doc.setFontSize(px(20));
+      doc.setTextColor(10, 15, 31);
+      doc.text('FRIA', markEndX + px(10), y - px(6));
+      doc.setFont('Inter', 'normal');
+      doc.setFontSize(px(9));
+      doc.setTextColor(92, 107, 138);
+      doc.text('FREIGHT RATE INTELLIGENCE', markEndX + px(10), y + px(6));
+    }
 
     doc.setFont('Inter', 'bold');
     doc.setFontSize(px(9));
@@ -274,32 +315,6 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.setFontSize(px(11));
     doc.setTextColor(10, 15, 31);
     doc.text(String(context.quoteNumber || '—'), R, y + px(23), { align: 'right' });
-
-    if (logoUrl) {
-      try {
-        const logoRes = await fetch(logoUrl);
-        const logoBuffer = await logoRes.arrayBuffer();
-        const logoB64 = await arrayBufferToBase64(logoBuffer);
-        const contentType = logoRes.headers.get('content-type') || '';
-        const format = contentType.includes('png') ? 'PNG' : 'JPEG';
-
-        const dims = await new Promise((resolve) => {
-          const img = new Image();
-          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-          img.onerror = () => resolve(null);
-          img.src = `data:${contentType};base64,${logoB64}`;
-        });
-
-        if (dims) {
-          const maxW = px(90), maxH = px(28);
-          let w = maxW, h = (dims.h / dims.w) * maxW;
-          if (h > maxH) { h = maxH; w = (dims.w / dims.h) * maxH; }
-          doc.addImage(`data:${contentType};base64,${logoB64}`, format, R - w, y - px(30), w, h);
-        }
-      } catch (e) {
-        console.error('No se pudo incrustar el logo del cliente:', e);
-      }
-    }
 
     y += px(24 + 24);
     doc.setDrawColor(220, 224, 232);
@@ -341,295 +356,4 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.setDrawColor(77, 142, 255);
     doc.setLineWidth(1.6);
     doc.line(arrowX, midY - px(4), arrowX + px(16), midY - px(4));
-    doc.line(arrowX + px(16), midY - px(4), arrowX + px(11), midY - px(8));
-    doc.line(arrowX + px(16), midY - px(4), arrowX + px(11), midY);
-
-    doc.setTextColor(10, 15, 31);
-    doc.text(String(context.destination || '—'), arrowX + px(24), midY);
-
-    const equipLabel = (context.equipment || '—').replace(/_/g, ' ').toUpperCase();
-    doc.setFont('Inter', 'bold');
-    doc.setFontSize(px(11));
-    doc.setTextColor(46, 91, 168);
-    const equipW = doc.getTextWidth(equipLabel) + px(24);
-    doc.setFillColor(234, 240, 251);
-    doc.roundedRect(R - px(22) - equipW, y + px(11), equipW, px(21), px(10), px(10), 'F');
-    doc.text(equipLabel, R - px(22) - equipW / 2, y + px(24), { align: 'center' });
-
-    y += routeCardH + px(14);
-    const rateCardH = px(18 * 2 + 34);
-    gradientRect(L, y, W, rateCardH, [234, 240, 251], [245, 248, 253], 'h');
-    doc.setDrawColor(77, 142, 255);
-    doc.setLineWidth(1.3);
-    doc.roundedRect(L, y, W, rateCardH, px(12), px(12), 'D');
-    doc.setFont('Inter', 'bold');
-    doc.setFontSize(px(10));
-    doc.setTextColor(46, 91, 168);
-    doc.text('TARIFA COTIZADA', L + px(24), y + px(22));
-    doc.setFont('JetBrainsMono', 'bold');
-    doc.setFontSize(px(34));
-    doc.setTextColor(10, 15, 31);
-    const rateText = `$${finalRate.toLocaleString()}`;
-    doc.text(rateText, L + px(24), y + px(50));
-    const rateW = doc.getTextWidth(rateText);
-    doc.setFont('Inter', 'bold');
-    doc.setFontSize(px(15));
-    doc.setTextColor(92, 107, 138);
-    doc.text(currency, L + px(24) + rateW + px(8), y + px(50));
-
-    y += rateCardH + px(16 + 14);
-    doc.setDrawColor(230, 234, 242);
-    doc.setLineWidth(0.75);
-    doc.line(L, y - px(14), R, y - px(14));
-    const colW = W / 3;
-    const metaCols = [
-      ['VIGENCIA', validUntil ? `Hasta ${validUntil}` : '—'],
-      ['TRÁNSITO ESTIMADO', transitDays ? `${transitDays} día${transitDays == 1 ? '' : 's'}` : '—'],
-      ['CONDICIONES DE PAGO', condiciones || '—'],
-    ];
-    metaCols.forEach(([label, value], i) => {
-      const cx = L + i * colW;
-      doc.setFont('Inter', 'bold');
-      doc.setFontSize(px(9.5));
-      doc.setTextColor(92, 107, 138);
-      doc.text(label, cx, y);
-      doc.setFont('JetBrainsMono', 'normal');
-      doc.setFontSize(px(12));
-      doc.setTextColor(10, 15, 31);
-      const lines = doc.splitTextToSize(value, colW - px(12));
-      doc.text(lines, cx, y + px(16));
-    });
-
-    y += px(34);
-    doc.setDrawColor(230, 234, 242);
-    doc.line(L, y, R, y);
-    y += px(18);
-    doc.setFont('Inter', 'bold');
-    doc.setFontSize(px(10));
-    doc.setTextColor(10, 15, 31);
-    doc.text('CONDICIONES GENERALES', L, y);
-    y += px(12);
-
-    const colGap = px(26);
-    const condColW = (W - colGap) / 2;
-    const half = Math.ceil(CONDICIONES_GENERALES.length / 2);
-    const leftItems = CONDICIONES_GENERALES.slice(0, half);
-    const rightItems = CONDICIONES_GENERALES.slice(half);
-
-    doc.setFont('Inter', 'normal');
-    doc.setFontSize(px(7.6));
-    doc.setTextColor(58, 69, 96);
-
-    function renderList(items, x) {
-      let cy = y;
-      items.forEach(item => {
-        const lines = doc.splitTextToSize(`•  ${item}`, condColW);
-        doc.text(lines, x, cy);
-        cy += lines.length * px(7.6 * 1.5) + px(1);
-      });
-      return cy;
-    }
-    const leftEndY = renderList(leftItems, L);
-    const rightEndY = renderList(rightItems, L + condColW + colGap);
-    y = Math.max(leftEndY, rightEndY) + px(8);
-
-    const footerLineY = Math.max(y + px(20), 792 - px(40));
-    doc.setDrawColor(230, 234, 242);
-    doc.line(L, footerLineY, R, footerLineY);
-    const footerTextY = footerLineY + px(14);
-    doc.setFont('Inter', 'normal');
-    doc.setFontSize(px(9));
-    doc.setTextColor(136, 148, 179);
-    doc.text('FRIA · cotizaciones@friaai.com', L, footerTextY);
-    doc.setFont('JetBrainsMono', 'normal');
-    doc.text('Página 1 de 1', R, footerTextY, { align: 'right' });
-
-    // Se obtiene el PDF como blob para poder usarlo dos veces: descarga
-    // inmediata en el navegador Y respaldo real en Storage -- antes solo
-    // se descargaba y el archivo se perdia, sin quedar registrado en FRIA.
-    const blob = doc.output('blob');
-    const downloadUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = `Cotizacion_${context.quoteNumber || 'FRIA'}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(downloadUrl);
-
-    if (context.quoteId) {
-      setSaving(true);
-      let pdfUrl = null;
-      try {
-        const fileName = `${context.quoteId}.pdf`;
-        const { error: uploadError } = await supabase.storage
-          .from('sell-quotes')
-          .upload(fileName, blob, { contentType: 'application/pdf', upsert: true });
-
-        if (uploadError) {
-          console.error('No se pudo guardar el PDF en Storage:', uploadError);
-        } else {
-          const { data: urlData } = supabase.storage.from('sell-quotes').getPublicUrl(fileName);
-          pdfUrl = urlData.publicUrl;
-        }
-      } catch (e) {
-        console.error('Error subiendo el PDF de venta:', e);
-      }
-
-      await supabase
-        .from('quotes')
-        .update({
-          sell_price: finalRate,
-          sell_margin_type: 'fixed',
-          sell_margin_value: marginAmount,
-          sell_currency: currency,
-          sell_pdf_generated_at: new Date().toISOString(),
-          sell_pdf_url: pdfUrl,
-          status: 'quoted',
-        })
-        .eq('id', context.quoteId);
-      setSaving(false);
-      setSaved(true);
-    }
-  }
-
-  return (
-    <div style={{ padding: '48px 56px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div>
-          <div
-            onClick={() => setActiveTab(context.returnTo || 'home')}
-            style={{ fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer', marginBottom: '10px' }}
-          >
-            ← {context.returnTo === 'history' ? 'Historial' : 'Pricing'}
-          </div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>
-            Armar cotización de venta
-          </div>
-        </div>
-
-        <div style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
-          padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Tarifa base — {context.carrierName || 'carrier'} (ganador)
-            </div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: '16px', color: 'var(--text-primary)' }}>
-              ${baseRate.toLocaleString()}
-            </div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Cliente</div>
-            <input value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Nombre del cliente" style={{
-              width: '100%', height: '40px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
-              border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px', color: 'var(--text-primary)',
-              fontFamily: 'var(--font)', boxSizing: 'border-box',
-            }} />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Margen ($)</div>
-              <input type="number" value={marginAmount} onChange={e => handleAmountChange(e.target.value)} style={{
-                width: '100%', height: '44px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
-                border: '1px solid var(--border-input)', padding: '0 14px', fontFamily: 'var(--mono)', fontSize: '14px',
-                color: 'var(--text-primary)', boxSizing: 'border-box',
-              }} />
-            </div>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Equivale a</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <input type="number" value={marginPercent} onChange={e => handlePercentChange(e.target.value)} style={{
-                  width: '100%', height: '44px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
-                  border: '1px solid var(--border-input)', padding: '0 14px', fontFamily: 'var(--mono)', fontSize: '14px',
-                  color: 'var(--text-secondary)', boxSizing: 'border-box',
-                }} />
-                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>%</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Vigencia</div>
-              <input value={validUntil} onChange={e => setValidUntil(e.target.value)} placeholder="ej. 2026-08-14" style={{
-                width: '100%', height: '40px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
-                border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px', color: 'var(--text-primary)',
-                fontFamily: 'var(--font)', boxSizing: 'border-box',
-              }} />
-            </div>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Tránsito (días)</div>
-              <input type="number" value={transitDays} onChange={e => setTransitDays(e.target.value)} style={{
-                width: '100%', height: '40px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
-                border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px', color: 'var(--text-primary)',
-                fontFamily: 'var(--font)', boxSizing: 'border-box',
-              }} />
-            </div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Condiciones de pago</div>
-            <input value={condiciones} onChange={e => setCondiciones(e.target.value)} style={{
-              width: '100%', height: '40px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
-              border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px', color: 'var(--text-primary)',
-              fontFamily: 'var(--font)', boxSizing: 'border-box',
-            }} />
-          </div>
-
-          <div style={{ height: '1px', background: 'var(--border-card)' }} />
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Tarifa final al cliente</div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: '24px', fontWeight: 700, color: 'var(--success-text)' }}>
-              ${finalRate.toLocaleString()}
-            </div>
-          </div>
-
-          <button onClick={handleDownload} disabled={saving} style={{
-            height: '46px', borderRadius: 'var(--radius-md)', background: 'var(--accent-primary)', color: '#FFFFFF',
-            border: 'none', fontSize: '14px', fontWeight: 700, cursor: saving ? 'default' : 'pointer',
-            fontFamily: 'var(--font)', opacity: saving ? 0.7 : 1,
-          }}>
-            {saving ? 'Guardando…' : '⬇ Descargar PDF de cotización'}
-          </button>
-          {saved && (
-            <div style={{ fontSize: '12px', color: 'var(--success-text)', textAlign: 'center' }}>
-              Guardado en la cotización.
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div style={{
-        background: '#E8ECF3', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
-        padding: '20px', display: 'flex', justifyContent: 'center', overflow: 'hidden',
-      }}>
-        <div style={{ width: '360px', height: '466px', overflow: 'hidden', position: 'relative', boxShadow: '0 4px 16px rgba(10,15,31,.12)' }}>
-          <div
-            style={{ width: '700px', transform: 'scale(0.514)', transformOrigin: 'top left' }}
-            dangerouslySetInnerHTML={{
-              __html: buildQuoteHtml({
-                folio: context.quoteNumber || '—',
-                cliente,
-                vendedor: user?.name,
-                origin: context.origin,
-                destination: context.destination,
-                equipment: context.equipment,
-                rate: finalRate,
-                currency,
-                validUntil,
-                transitDays,
-                condiciones,
-                logoUrl,
-              }),
-            }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
+    doc.line(arrowX + px(16), midY - px(4),
