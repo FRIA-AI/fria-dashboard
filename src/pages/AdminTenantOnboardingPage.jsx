@@ -144,10 +144,14 @@ export default function AdminTenantOnboardingPage() {
           </div>
           <div>
             <div style={labelStyle}>Logo del cliente (PNG o JPG) — se usa en sus PDF de cotización</div>
+            <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginBottom: '8px', lineHeight: 1.5 }}>
+              Ideal: formato horizontal ancho (ej. 480×140px o proporción similar) — como un logo de membrete.
+              Cualquier proporción funciona, se ajusta automáticamente sin recortarse ni deformarse.
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               {logoPreview && (
                 <img src={logoPreview} alt="Logo" style={{
-                  width: '48px', height: '48px', objectFit: 'contain', borderRadius: 'var(--radius-sm)',
+                  maxWidth: '140px', maxHeight: '48px', objectFit: 'contain', borderRadius: 'var(--radius-sm)',
                   border: '1px solid var(--border-input)', background: '#FFFFFF', padding: '4px',
                 }} />
               )}
