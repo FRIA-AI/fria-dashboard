@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { ImapFlow } from 'imapflow';
+import { simpleParser } from 'mailparser';
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
@@ -296,6 +298,61 @@ async function processMicrosoftTenantInbox(oauth) {
   return results;
 }
 
+// --- IMAP (SMTP + contrasena de aplicacion, sin OAuth) -----------------
+// Aqui no hay historyId ni deltaLink -- se usa el propio estado "no leido"
+// del correo como marcador: se buscan solo los mensajes sin leer, y se
+// marcan como leidos justo despues de procesarlos. Es el mismo criterio que
+// seguiria una persona revisando la bandeja a mano.
+async function processImapTenantInbox(config) {
+  const results = [];
+  const client = new ImapFlow({
+    host: config.imap_host, port: config.imap_port, secure: config.imap_secure,
+    auth: { user: config.smtp_user, pass: config.smtp_password },
+    logger: false,
+  });
+
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const uids = await client.search({ seen: false });
+      for (const uid of uids) {
+        const { content } = await client.download(uid);
+        const parsed = await simpleParser(content);
+
+        const subject = parsed.subject || '';
+        const isRfqSubject = RFQ_SUBJECT_PATTERN.test(subject);
+        const isFriaNotification = FRIA_NOTIFICATION_SUBJECT_PREFIXES.some((prefix) => subject.startsWith(prefix));
+
+        if (isRfqSubject && !isFriaNotification) {
+          const fromAddr = parsed.from?.value?.[0] || {};
+          results.push({
+            tenant_id: config.tenant_id,
+            subject,
+            from: { value: [{ address: fromAddr.address || '', name: fromAddr.name || '' }] },
+            text: parsed.text || '',
+            messageId: parsed.messageId || String(uid),
+          });
+        }
+
+        // Se marca como leido en cualquier caso (sea RFQ o no) para no
+        // volver a revisarlo la proxima corrida.
+        await client.messageFlagsAdd(uid, ['\\Seen']);
+      }
+    } finally {
+      lock.release();
+    }
+    await client.logout();
+  } catch (e) {
+    await supabaseAdmin.from('tenant_email_configs').update({
+      last_error: `imap: ${e.message}`, updated_at: new Date().toISOString(),
+    }).eq('tenant_id', config.tenant_id);
+    return results;
+  }
+
+  return results;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -325,6 +382,24 @@ export default async function handler(req, res) {
       allResults.push(...items);
     } catch (e) {
       console.error(`read-inbox error for tenant ${oauth.tenant_id} (${oauth.provider}):`, e);
+    }
+  }
+
+  // Tenants conectados por SMTP + contrasena de aplicacion (sin OAuth) --
+  // solo los que ya tienen imap_host guardado, es decir, los que pasaron la
+  // prueba real de conexion al conectarse desde Configuracion.
+  const { data: smtpConfigs } = await supabaseAdmin
+    .from('tenant_email_configs')
+    .select('*')
+    .eq('is_active', true)
+    .not('imap_host', 'is', null);
+
+  for (const config of smtpConfigs || []) {
+    try {
+      const items = await processImapTenantInbox(config);
+      allResults.push(...items);
+    } catch (e) {
+      console.error(`read-inbox error for tenant ${config.tenant_id} (imap):`, e);
     }
   }
 
