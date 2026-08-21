@@ -132,12 +132,12 @@ export default function MarketIntelligencePage({ user }) {
   }, [bestOwnPrice, selected]);
 
   if (loading) {
-    return <div style={{ padding: '48px 56px', fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>;
+    return <div style={{ padding: '48px var(--page-pad-x)', fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>;
   }
 
   if (!miPlan || miPlan === 'none') {
     return (
-      <div style={{ padding: '48px 56px', display: 'flex', justifyContent: 'center' }}>
+      <div style={{ padding: '48px var(--page-pad-x)', display: 'flex', justifyContent: 'center' }}>
         <Card style={{ maxWidth: '880px', width: '100%', padding: '48px 40px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '18px', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '26px' }}>
             {[0.4, 0.65, 1, 0.8, 0.55].map((h, i) => (
@@ -151,7 +151,7 @@ export default function MarketIntelligencePage({ user }) {
             Rango real de mercado por ruta y equipo, comparado contra tus propias cotizaciones — calculado con
             tarifarios y respuestas de carriers de toda la red de FRIA.
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', width: '100%', marginTop: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-3col)', gap: '14px', width: '100%', marginTop: '10px' }}>
             {[
               ['Mediana y rango real', 'Sabe si tu tarifa está dentro de mercado antes de cerrar.'],
               ['Comparativa por carrier', 'Tus propias cotizaciones contra la mediana, lado a lado.'],
@@ -185,7 +185,7 @@ export default function MarketIntelligencePage({ user }) {
 
   if (allRoutes.length === 0) {
     return (
-      <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ padding: '48px var(--page-pad-x)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Inteligencia de Mercado</div>
         <Card style={{ textAlign: 'center', padding: '48px', fontSize: '13px', color: 'var(--text-secondary)' }}>
           Todavía no hay ninguna ruta con suficientes datos combinados (tarifarios + respuestas de carriers) para
@@ -196,7 +196,7 @@ export default function MarketIntelligencePage({ user }) {
   }
 
   return (
-    <div style={{ padding: '48px 56px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
+    <div style={{ padding: '48px var(--page-pad-x)', display: 'flex', flexDirection: 'column', gap: '22px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
         <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Inteligencia de Mercado</div>
         <select value={selectedKey} onChange={e => setSelectedKey(e.target.value)} style={{
@@ -235,7 +235,7 @@ export default function MarketIntelligencePage({ user }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1fr 1fr', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'var(--mi-hero-grid)', gap: '16px' }}>
         <MarketStatCard
           label="Mediana de mercado"
           value={selected ? `$${Number(selected.frai_value).toLocaleString()}` : '—'}
@@ -274,7 +274,7 @@ export default function MarketIntelligencePage({ user }) {
         </Card>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-2col)', gap: '16px' }}>
         <Phase2Frame title="Tendencia semanal" reason="8 semanas de historial">
           <div style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', color: 'var(--text-secondary)' }}>
             Gráfica de mediana semanal — disponible cuando existan varias corridas.
@@ -288,6 +288,7 @@ export default function MarketIntelligencePage({ user }) {
       </div>
 
       <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
         <TRow header cols={['Ruta', 'Equipo', 'Mediana', 'Rango', 'Datos', 'Fuentes', 'Tendencia']} />
         {allRoutes.map((r, i) => (
           <TRow key={i} cols={[
@@ -306,6 +307,7 @@ export default function MarketIntelligencePage({ user }) {
             <span key="trend" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>— fase 2</span>,
           ]} />
         ))}
+        </div>
       </div>
 
       <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
