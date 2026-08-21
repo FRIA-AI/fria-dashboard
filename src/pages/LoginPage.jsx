@@ -45,15 +45,15 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--bg-page)', padding: '32px', fontFamily: 'var(--font)',
+      background: 'var(--bg-page)', padding: 'var(--login-outer-pad)', fontFamily: 'var(--font)',
     }}>
       <div style={{
-        width: '100%', maxWidth: '1100px', minHeight: '620px', display: 'flex',
-        borderRadius: '14px', overflow: 'hidden', boxShadow: '0 30px 80px rgba(10,15,31,.18)',
+        width: '100%', maxWidth: '1100px', minHeight: 'var(--login-min-height)', display: 'flex',
+        borderRadius: 'var(--login-radius)', overflow: 'hidden', boxShadow: '0 30px 80px rgba(10,15,31,.18)',
       }}>
         {/* Panel izquierdo — formulario */}
         <div style={{
-          width: '46%', background: 'var(--bg-card)', padding: '64px 56px',
+          width: 'var(--login-left-width)', background: 'var(--bg-card)', padding: 'var(--login-left-pad)',
           display: 'flex', flexDirection: 'column', gap: '32px', justifyContent: 'center',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -121,8 +121,8 @@ export default function LoginPage() {
 
         {/* Panel derecho — vista previa ilustrativa */}
         <div style={{
-          width: '54%', background: 'var(--bg-panel)', padding: '56px',
-          display: 'flex', flexDirection: 'column', gap: '20px', justifyContent: 'center',
+          width: `calc(100% - var(--login-left-width))`, background: 'var(--bg-panel)', padding: '56px',
+          display: 'var(--login-right-display)', flexDirection: 'column', gap: '20px', justifyContent: 'center',
           borderLeft: '1px solid var(--border-card)',
         }}>
           <div style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '.06em', color: 'var(--accent-primary)', textTransform: 'uppercase' }}>
