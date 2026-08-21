@@ -1,4 +1,5 @@
 import { supabaseAdmin, resolveFriaStaffFromToken } from '../../lib/resolveTenant.js';
+import sharp from 'sharp';
 
 function slugify(text) {
   return text
@@ -11,6 +12,13 @@ function slugify(text) {
 
 const VALID_ROLES = ['admin', 'pricing', 'sales', 'readonly'];
 const VALID_PLANS = ['starter', 'growth', 'pro', 'enterprise'];
+
+// Tamano estandar al que se normaliza CUALQUIER logo subido -- formato
+// ancho tipo membrete (proporcion 24:7). Asi el PDF de venta siempre puede
+// confiar en la misma forma exacta, sin importar que tan raro sea el
+// archivo original que suba el cliente.
+const LOGO_CANVAS_W = 480;
+const LOGO_CANVAS_H = 140;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -25,7 +33,7 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Solo el staff de FRIA puede dar de alta un tenant.' });
   }
 
-  const { companyName, primaryEmail, country, plan, users } = req.body || {};
+  const { companyName, primaryEmail, country, plan, users, logoBase64, logoContentType } = req.body || {};
 
   if (!companyName || !primaryEmail) {
     return res.status(400).json({ error: 'Falta companyName o primaryEmail.' });
@@ -75,6 +83,46 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'No se pudo crear el tenant.', details: tenantError?.message });
   }
 
+  // Logo del tenant -- se sube a Storage y se guarda la URL publica en
+  // tenants.logo_url. Si falla, no se detiene el alta del tenant -- se
+  // reporta el error en la respuesta para que la pantalla lo muestre
+  // (result.logoError, que el frontend ya sabia leer, solo nunca llegaba).
+  let logoError = null;
+  if (logoBase64 && logoContentType) {
+    try {
+      const inputBuffer = Buffer.from(logoBase64, 'base64');
+
+      // Se ajusta dentro del lienzo (sin recortar ni deformar), centrado,
+      // con fondo transparente -- sea cual sea la forma original.
+      const normalizedBuffer = await sharp(inputBuffer)
+        .resize(LOGO_CANVAS_W, LOGO_CANVAS_H, {
+          fit: 'contain',
+          background: { r: 255, g: 255, b: 255, alpha: 0 },
+        })
+        .png()
+        .toBuffer();
+
+      const path = `${tenant.id}/logo.png`;
+
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('tenant-logos')
+        .upload(path, normalizedBuffer, { contentType: 'image/png', upsert: true });
+
+      if (uploadError) {
+        logoError = uploadError.message;
+      } else {
+        const { data: publicUrlData } = supabaseAdmin.storage.from('tenant-logos').getPublicUrl(path);
+        const { error: updateError } = await supabaseAdmin
+          .from('tenants')
+          .update({ logo_url: publicUrlData.publicUrl })
+          .eq('id', tenant.id);
+        if (updateError) logoError = updateError.message;
+      }
+    } catch (e) {
+      logoError = e.message;
+    }
+  }
+
   const dashboardBase = process.env.FRIA_DASHBOARD_URL || 'https://fria-dashboard.vercel.app';
   const results = [];
 
@@ -119,5 +167,5 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.status(200).json({ tenant, results });
+  return res.status(200).json({ tenant, results, logoError });
 }
