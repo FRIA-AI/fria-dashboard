@@ -279,14 +279,19 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
 
     let y = px(48);
 
-    if (clientLogo) {
+        if (clientLogo) {
       // El logo del cliente sustituye la marca de FRIA -- este documento lo
       // ve el carrier/cliente final del tenant, debe verse como suyo.
+      // Se ancla desde arriba, usando casi todo el alto disponible del
+      // encabezado (hasta la linea divisoria) -- necesario para que logos
+      // casi cuadrados o verticales (icono + texto apilado, como el de
+      // Terra) se vean con presencia real, no diminutos.
       const { dataUrl, format, dims } = clientLogo;
-      const maxW = px(140), maxH = px(40);
+      const logoTop = px(8);
+      const maxW = px(190), maxH = px(58);
       let w = maxW, h = (dims.h / dims.w) * maxW;
       if (h > maxH) { h = maxH; w = (dims.w / dims.h) * maxH; }
-      doc.addImage(dataUrl, format, L, y - h + px(4), w, h);
+      doc.addImage(dataUrl, format, L, logoTop, w, h);
     } else {
       const markEndX = drawLogoMark(L, y - px(2), 22);
       doc.setFont('InterExtraBold', 'bold');
