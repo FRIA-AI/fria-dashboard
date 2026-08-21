@@ -11,6 +11,12 @@
   --nav-item-fs: 13px;
   --nav-item-gap: 26px;
   --nav-logo-gap: 48px;
+  --login-left-width: 46%;
+  --login-left-pad: 64px 56px;
+  --login-right-display: flex;
+  --login-outer-pad: 32px;
+  --login-min-height: 620px;
+  --login-radius: 14px;
 }
 
 @media (max-width: 1024px) {
@@ -20,6 +26,8 @@
     --nav-pad-x: 24px;
     --nav-item-gap: 18px;
     --nav-logo-gap: 24px;
+    --login-left-width: 55%;
+    --login-left-pad: 44px 40px;
   }
 }
 
@@ -30,6 +38,12 @@
     --grid-3col: 1fr;
     --grid-4col: 1fr;
     --nav-item-fs: 12px;
+    --login-left-width: 100%;
+    --login-left-pad: 40px 26px;
+    --login-right-display: none;
+    --login-outer-pad: 0px;
+    --login-min-height: auto;
+    --login-radius: 0px;
   }
 }
 
