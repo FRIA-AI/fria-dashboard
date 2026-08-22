@@ -279,16 +279,17 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
 
     let y = px(48);
 
-        if (clientLogo) {
+            if (clientLogo) {
       // El logo del cliente sustituye la marca de FRIA -- este documento lo
-      // ve el carrier/cliente final del tenant, debe verse como suyo.
-      // Se ancla desde arriba, usando casi todo el alto disponible del
-      // encabezado (hasta la linea divisoria) -- necesario para que logos
-      // casi cuadrados o verticales (icono + texto apilado, como el de
-      // Terra) se vean con presencia real, no diminutos.
+      // ve el carrier/cliente final del tenant, debe verse como suyo, con
+      // presencia real (no un timbre chico). Usa mucho mas alto que el
+      // espacio original de la marca de FRIA, por eso el resto del
+      // documento se empuja hacia abajo mas de lo normal (ver el += de y
+      // condicional, unas lineas abajo) -- si no, el titulo "Cotizacion de
+      // flete" quedaria encimado con el logo.
       const { dataUrl, format, dims } = clientLogo;
-      const logoTop = px(8);
-      const maxW = px(190), maxH = px(58);
+      const logoTop = px(6);
+      const maxW = px(210), maxH = px(85);
       let w = maxW, h = (dims.h / dims.w) * maxW;
       if (h > maxH) { h = maxH; w = (dims.w / dims.h) * maxH; }
       doc.addImage(dataUrl, format, L, logoTop, w, h);
@@ -321,7 +322,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.setTextColor(10, 15, 31);
     doc.text(String(context.quoteNumber || '—'), R, y + px(23), { align: 'right' });
 
-    y += px(24 + 24);
+        y += clientLogo ? px(24 + 60) : px(24 + 24);
     doc.setDrawColor(220, 224, 232);
     doc.setLineWidth(0.75);
     doc.line(L, y - px(24), R, y - px(24));
