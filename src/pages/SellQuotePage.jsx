@@ -53,9 +53,10 @@ const CONDICIONES_GENERALES = [
   'Tránsito en zonas de alto riesgo se debe revisar antes de despachar la unidad.',
 ];
 
-function buildQuoteHtml({ folio, cliente, vendedor, origin, destination, equipment, rate, currency, validUntil, transitDays, condiciones, logoUrl }) {
+function buildQuoteHtml({ folio, cliente, vendedor, origin, destination, equipment, rate, currency, validUntil, transitDays, condiciones, logoUrl, terms }) {
   const equipmentLabel = (equipment || '—').replace(/_/g, ' ').toUpperCase();
-  const conditionsHtml = CONDICIONES_GENERALES.map(c => `<li style="break-inside:avoid;margin-bottom:3px">${c}</li>`).join('');
+  const termsList = terms && terms.length ? terms : CONDICIONES_GENERALES;
+  const conditionsHtml = termsList.map(c => `<li style="break-inside:avoid;margin-bottom:3px">${c}</li>`).join('');
 
   return `
   <div style="width:700px;background:#FFFFFF;font-family:'Inter',Arial,sans-serif;padding:0;box-sizing:border-box;">
@@ -152,6 +153,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [logoUrl, setLogoUrl] = useState(null);
+  const [customTerms, setCustomTerms] = useState(null);
 
   useEffect(() => {
     async function loadBranding() {
@@ -163,6 +165,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
         });
         const data = await res.json();
         setLogoUrl(data.logoUrl || null);
+        setCustomTerms(data.customTerms || null);
       } catch {
         setLogoUrl(null);
       }
@@ -279,7 +282,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
 
     let y = px(48);
 
-            if (clientLogo) {
+    if (clientLogo) {
       // El logo del cliente sustituye la marca de FRIA -- este documento lo
       // ve el carrier/cliente final del tenant, debe verse como suyo, con
       // presencia real (no un timbre chico). Usa mucho mas alto que el
@@ -287,7 +290,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
       // documento se empuja hacia abajo mas de lo normal (ver el += de y
       // condicional, unas lineas abajo) -- si no, el titulo "Cotizacion de
       // flete" quedaria encimado con el logo.
-            const { dataUrl, format, dims } = clientLogo;
+      const { dataUrl, format, dims } = clientLogo;
       const logoTop = px(18); // deja aire debajo de la barra de color de arriba (termina en px(8))
       const maxW = px(220), maxH = px(95);
       let w = maxW, h = (dims.h / dims.w) * maxW;
@@ -322,7 +325,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.setTextColor(10, 15, 31);
     doc.text(String(context.quoteNumber || '—'), R, y + px(23), { align: 'right' });
 
-        y += clientLogo ? px(24 + 80) : px(24 + 24);
+    y += clientLogo ? px(24 + 80) : px(24 + 24);
     doc.setDrawColor(220, 224, 232);
     doc.setLineWidth(0.75);
     doc.line(L, y - px(24), R, y - px(24));
@@ -433,9 +436,14 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
 
     const colGap = px(26);
     const condColW = (W - colGap) / 2;
-    const half = Math.ceil(CONDICIONES_GENERALES.length / 2);
-    const leftItems = CONDICIONES_GENERALES.slice(0, half);
-    const rightItems = CONDICIONES_GENERALES.slice(half);
+    // Si el tenant guardo sus propios Terminos y Condiciones (un renglon
+    // por condicion), se usan esos -- si no, el texto generico de FRIA.
+    const effectiveTerms = customTerms
+      ? customTerms.split('\n').map(l => l.trim()).filter(Boolean)
+      : CONDICIONES_GENERALES;
+    const half = Math.ceil(effectiveTerms.length / 2);
+    const leftItems = effectiveTerms.slice(0, half);
+    const rightItems = effectiveTerms.slice(half);
 
     doc.setFont('Inter', 'normal');
     doc.setFontSize(px(7.6));
@@ -646,6 +654,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
                 transitDays,
                 condiciones,
                 logoUrl,
+                terms: customTerms ? customTerms.split('\n').map(l => l.trim()).filter(Boolean) : null,
               }),
             }}
           />
