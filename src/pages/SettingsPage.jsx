@@ -79,6 +79,11 @@ export default function SettingsPage() {
   const [manualImapSecure, setManualImapSecure] = useState(true);
   const [smtpSubmitting, setSmtpSubmitting] = useState(false);
   const [smtpError, setSmtpError] = useState('');
+  const [termsInput, setTermsInput] = useState('');
+  const [termsLoaded, setTermsLoaded] = useState(false);
+  const [termsSaving, setTermsSaving] = useState(false);
+  const [termsSaved, setTermsSaved] = useState(false);
+  const [termsError, setTermsError] = useState('');
 
   async function loadStatus() {
     setStatus('loading');
@@ -104,6 +109,56 @@ export default function SettingsPage() {
   }
 
   useEffect(() => { loadStatus(); }, []);
+
+  useEffect(() => {
+    async function loadTerms() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      try {
+        const res = await fetch('/api/tenant-branding', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const data = await res.json();
+        setTermsInput(data.customTerms || '');
+      } catch {
+        // se queda vacio -- el formulario simplemente arranca en blanco
+      } finally {
+        setTermsLoaded(true);
+      }
+    }
+    loadTerms();
+  }, []);
+
+  async function handleSaveTerms() {
+    setTermsSaving(true);
+    setTermsError('');
+    setTermsSaved(false);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setTermsSaving(false); return; }
+
+    try {
+      const res = await fetch('/api/tenant-terms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ customTerms: termsInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTermsError(data.error || 'No se pudo guardar.');
+        return;
+      }
+      setTermsSaved(true);
+    } catch {
+      setTermsError('No se pudo conectar con FRIA. Intenta de nuevo.');
+    } finally {
+      setTermsSaving(false);
+    }
+  }
+
+  function handleResetTerms() {
+    setTermsInput('');
+    setTermsSaved(false);
+  }
 
   async function handleConnect(providerKey) {
     const { data: { session } } = await supabase.auth.getSession();
@@ -449,6 +504,65 @@ export default function SettingsPage() {
               fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6,
             }}>
               Si necesitas desconectar y volver a conectar (por ejemplo, para cambiar de cuenta o de proveedor), usa el botón "Desconectar" primero y repite estos pasos.
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ borderTop: '1px solid var(--border-card)', paddingTop: '24px' }}>
+        <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
+          Términos y Condiciones de tus cotizaciones
+        </div>
+        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '16px' }}>
+          Un renglón por condición — cada uno aparece como un punto en el PDF de cotización. Si lo dejas
+          vacío, FRIA usa un texto genérico por defecto.
+        </div>
+
+        {!termsLoaded ? (
+          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <textarea
+              value={termsInput}
+              onChange={e => { setTermsInput(e.target.value); setTermsSaved(false); }}
+              placeholder="Tarifas más IVA.&#10;Sujeto a pesos y dimensiones de la carga.&#10;..."
+              rows={10}
+              style={{
+                width: '100%', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
+                border: '1px solid var(--border-input)', padding: '14px', fontSize: '13px',
+                color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font)',
+                lineHeight: 1.6, resize: 'vertical', boxSizing: 'border-box',
+              }}
+            />
+
+            {termsError && (
+              <div style={{
+                background: 'var(--alert-bg)', border: '1px solid var(--alert-text)', borderRadius: 'var(--radius-md)',
+                padding: '10px 14px', color: 'var(--alert-text)', fontSize: '12.5px',
+              }}>
+                {termsError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button onClick={handleSaveTerms} disabled={termsSaving} style={{
+                height: '40px', padding: '0 20px', borderRadius: 'var(--radius-md)',
+                background: 'var(--accent-primary)', border: 'none', color: '#FFFFFF', fontSize: '13px',
+                fontWeight: 700, cursor: termsSaving ? 'default' : 'pointer', opacity: termsSaving ? 0.7 : 1,
+                fontFamily: 'var(--font)',
+              }}>
+                {termsSaving ? 'Guardando…' : 'Guardar'}
+              </button>
+              <button onClick={handleResetTerms} style={{
+                height: '40px', padding: '0 16px', borderRadius: 'var(--radius-md)', background: 'none',
+                border: '1px solid var(--border-input)', color: 'var(--text-secondary)', fontSize: '13px',
+                fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)',
+              }}>
+                Volver al texto de FRIA por defecto
+              </button>
+              {termsSaved && (
+                <span style={{ fontSize: '12.5px', color: 'var(--success-text)' }}>Guardado.</span>
+              )}
             </div>
           </div>
         )}
