@@ -15,13 +15,16 @@ export default async function handler(req, res) {
 
   const { data: tenant, error } = await supabaseAdmin
     .from('tenants')
-    .select('logo_url')
+    .select('logo_url, custom_terms_conditions')
     .eq('id', tenantId)
     .single();
 
   if (error || !tenant) {
-    return res.status(200).json({ logoUrl: null });
+    return res.status(200).json({ logoUrl: null, customTerms: null });
   }
 
-  return res.status(200).json({ logoUrl: tenant.logo_url || null });
+  return res.status(200).json({
+    logoUrl: tenant.logo_url || null,
+    customTerms: tenant.custom_terms_conditions || null,
+  });
 }
