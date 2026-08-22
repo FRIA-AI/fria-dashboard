@@ -287,9 +287,9 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
       // documento se empuja hacia abajo mas de lo normal (ver el += de y
       // condicional, unas lineas abajo) -- si no, el titulo "Cotizacion de
       // flete" quedaria encimado con el logo.
-      const { dataUrl, format, dims } = clientLogo;
-      const logoTop = px(6);
-      const maxW = px(210), maxH = px(85);
+            const { dataUrl, format, dims } = clientLogo;
+      const logoTop = px(18); // deja aire debajo de la barra de color de arriba (termina en px(8))
+      const maxW = px(220), maxH = px(95);
       let w = maxW, h = (dims.h / dims.w) * maxW;
       if (h > maxH) { h = maxH; w = (dims.w / dims.h) * maxH; }
       doc.addImage(dataUrl, format, L, logoTop, w, h);
@@ -322,7 +322,7 @@ export default function SellQuotePage({ user, context, setActiveTab }) {
     doc.setTextColor(10, 15, 31);
     doc.text(String(context.quoteNumber || '—'), R, y + px(23), { align: 'right' });
 
-        y += clientLogo ? px(24 + 60) : px(24 + 24);
+        y += clientLogo ? px(24 + 80) : px(24 + 24);
     doc.setDrawColor(220, 224, 232);
     doc.setLineWidth(0.75);
     doc.line(L, y - px(24), R, y - px(24));
