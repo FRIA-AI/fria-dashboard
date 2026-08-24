@@ -1,236 +1,254 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
-const PLANS = ['starter', 'growth', 'pro', 'enterprise'];
+const ROLES = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'pricing', label: 'Pricing' },
+  { value: 'sales', label: 'Ventas' },
+  { value: 'readonly', label: 'Solo lectura' },
+];
 
-const PLAN_BADGE = {
-  starter: { bg: '#EEF1F8', color: 'var(--text-secondary)' },
-  growth: { bg: 'var(--info-bg)', color: 'var(--info-text)' },
-  pro: { bg: 'var(--success-bg)', color: 'var(--success-text)' },
-  enterprise: { bg: '#F3E8FF', color: '#7C3AED' },
-};
+const PLANS = [
+  { value: 'starter', label: 'Starter' },
+  { value: 'growth', label: 'Growth' },
+  { value: 'pro', label: 'Pro' },
+  { value: 'enterprise', label: 'Enterprise' },
+];
 
-const STATUS_BADGE = {
-  trial: { bg: '#FFF4E5', color: '#B36B00' },
-  active: { bg: 'var(--success-bg)', color: 'var(--success-text)' },
-  cancelled: { bg: 'var(--alert-bg)', color: 'var(--alert-text)' },
-};
-
-const ROLE_LABELS = { admin: 'Admin', pricing: 'Pricing', sales: 'Ventas', readonly: 'Solo lectura' };
-
-function timeAgo(iso) {
-  if (!iso) return '—';
-  const days = Math.round((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (days < 1) return 'hoy';
-  if (days === 1) return 'ayer';
-  if (days < 30) return `hace ${days} días`;
-  return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+function emptyUser() {
+  return { email: '', firstName: '', lastName: '', role: 'sales' };
 }
 
-export default function AdminTenantsPage() {
-  const [tenants, setTenants] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
-  const [savingId, setSavingId] = useState(null);
+const inputStyle = {
+  height: '42px', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)',
+  border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px',
+  color: 'var(--text-primary)', fontFamily: 'var(--font)', boxSizing: 'border-box', width: '100%',
+};
+const labelStyle = { fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' };
 
-  async function loadTenants() {
-    setLoading(true);
+export default function AdminTenantOnboardingPage() {
+  const [companyName, setCompanyName] = useState('');
+  const [primaryEmail, setPrimaryEmail] = useState('');
+  const [country, setCountry] = useState('MX');
+  const [plan, setPlan] = useState('starter');
+  const [users, setUsers] = useState([emptyUser()]);
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  function updateUser(i, field, value) {
+    setUsers(prev => prev.map((u, idx) => idx === i ? { ...u, [field]: value } : u));
+  }
+
+  function handleLogoSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setError('El logo debe ser PNG o JPG.');
+      return;
+    }
     setError('');
+    setLogoFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setLogoPreview(reader.result);
+    reader.readAsDataURL(file);
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]); // quita el prefijo data:...;base64,
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setResult(null);
+    setSubmitting(true);
+
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setLoading(false); return; }
+    if (!session) { setSubmitting(false); return; }
 
     try {
-      const res = await fetch('/api/admin/tenants', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+      let logoBase64 = null, logoContentType = null;
+      if (logoFile) {
+        logoBase64 = await fileToBase64(logoFile);
+        logoContentType = logoFile.type;
+      }
+
+      const res = await fetch('/api/admin/create-tenant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ companyName, primaryEmail, country, plan, users, logoBase64, logoContentType }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || 'No se pudo cargar.');
+        setError(data.error || 'Algo falló al crear el tenant.');
       } else {
-        setTenants(data.tenants);
+        setResult(data);
+        setCompanyName(''); setPrimaryEmail(''); setUsers([emptyUser()]);
+        setLogoFile(null); setLogoPreview(null);
       }
-    } catch {
-      setError('No se pudo conectar con FRIA.');
+    } catch (e) {
+      setError('No se pudo conectar con el servidor.');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
-
-  useEffect(() => { loadTenants(); }, []);
-
-  async function updateTenant(tenantId, updates) {
-    setSavingId(tenantId);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setSavingId(null); return; }
-
-    try {
-      await fetch('/api/admin/tenants', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ tenantId, ...updates }),
-      });
-      // Actualiza en memoria de inmediato -- no hace falta recargar todo.
-      setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, ...(updates.plan !== undefined ? { plan: updates.plan } : {}), ...(updates.miPlan !== undefined ? { mi_plan: updates.miPlan } : {}) } : t));
-    } finally {
-      setSavingId(null);
-    }
-  }
-
-  const filtered = tenants.filter(t => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return t.company_name?.toLowerCase().includes(s)
-      || t.users.some(u => u.email?.toLowerCase().includes(s));
-  });
 
   return (
-    <div style={{ padding: '48px var(--page-pad-x)', display: 'flex', flexDirection: 'column', gap: '22px' }}>
+    <div style={{ padding: '48px 56px', maxWidth: '760px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div>
-        <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Tenants</div>
+        <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>Dar de alta un tenant nuevo</div>
         <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-          Solo visible para staff de FRIA. Plan, acceso a Inteligencia de Mercado, y usuarios de cada tenant.
+          Solo visible para staff de FRIA. Crea el tenant e invita a sus primeros usuarios de una vez.
         </div>
       </div>
 
-      <input
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder="🔍 Buscar por empresa o correo..."
-        style={{
-          height: '44px', maxWidth: '420px', borderRadius: 'var(--radius-md)',
-          background: 'var(--bg-card)', border: '1px solid var(--border-input)',
-          padding: '0 16px', fontSize: '13px', color: 'var(--text-primary)',
-          outline: 'none', fontFamily: 'var(--font)',
-        }}
-      />
-
-      {error && (
-        <div style={{ background: 'var(--alert-bg)', color: 'var(--alert-text)', borderRadius: 'var(--radius-md)', padding: '12px 16px', fontSize: '13px' }}>
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
-      ) : filtered.length === 0 ? (
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <div style={{
           background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
-          padding: '48px', textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)',
+          padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px',
         }}>
-          {search ? 'Sin resultados para esa búsqueda.' : 'Todavía no hay tenants.'}
+          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>Datos del tenant</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div>
+              <div style={labelStyle}>Nombre de la empresa</div>
+              <input required value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Grupo Industrial XYZ" style={inputStyle} />
+            </div>
+            <div>
+              <div style={labelStyle}>Correo principal</div>
+              <input required type="email" value={primaryEmail} onChange={e => setPrimaryEmail(e.target.value)} placeholder="contacto@cliente.com" style={inputStyle} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div>
+              <div style={labelStyle}>País</div>
+              <select value={country} onChange={e => setCountry(e.target.value)} style={inputStyle}>
+                <option value="MX">México</option>
+                <option value="US">Estados Unidos</option>
+                <option value="CA">Canadá</option>
+              </select>
+            </div>
+            <div>
+              <div style={labelStyle}>Plan</div>
+              <select value={plan} onChange={e => setPlan(e.target.value)} style={inputStyle}>
+                {PLANS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <div style={labelStyle}>Logo del cliente (PNG o JPG) — se usa en sus PDF de cotización</div>
+            <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginBottom: '8px', lineHeight: 1.5 }}>
+              Ideal: formato horizontal ancho (ej. 480×140px o proporción similar) — como un logo de membrete.
+              Cualquier proporción funciona, se ajusta automáticamente sin recortarse ni deformarse.
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              {logoPreview && (
+                <img src={logoPreview} alt="Logo" style={{
+                  maxWidth: '140px', maxHeight: '48px', objectFit: 'contain', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-input)', background: '#FFFFFF', padding: '4px',
+                }} />
+              )}
+              <input type="file" accept="image/png,image/jpeg" onChange={handleLogoSelect} style={{
+                fontSize: '13px', color: 'var(--text-secondary)', fontFamily: 'var(--font)',
+              }} />
+            </div>
+          </div>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {filtered.map(t => {
-            const planBadge = PLAN_BADGE[t.plan] || PLAN_BADGE.starter;
-            const statusBadge = STATUS_BADGE[t.status] || STATUS_BADGE.trial;
-            const hasMi = t.mi_plan && t.mi_plan !== 'none';
-            const isExpanded = expandedId === t.id;
-            const isSaving = savingId === t.id;
 
-            return (
-              <div key={t.id} style={{
-                background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
-              }}>
-                <div
-                  onClick={() => setExpandedId(isExpanded ? null : t.id)}
-                  style={{
-                    padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    flexWrap: 'wrap', gap: '12px', cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t.company_name}
-                    </div>
-                    <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                      {t.slug} · {t.users.length} usuario{t.users.length === 1 ? '' : 's'} · creado {timeAgo(t.created_at)}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                    <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: statusBadge.bg, color: statusBadge.color }}>
-                      {t.status}
-                    </span>
-                    <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: planBadge.bg, color: planBadge.color }}>
-                      {t.plan}
-                    </span>
-                    <span style={{
-                      padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600,
-                      background: hasMi ? 'var(--success-bg)' : '#EEF1F8', color: hasMi ? 'var(--success-text)' : 'var(--text-secondary)',
-                    }}>
-                      {hasMi ? 'Con Inteligencia de Mercado' : 'Sin Inteligencia de Mercado'}
-                    </span>
-                    <span style={{ color: 'var(--accent-primary)', fontSize: '14px' }}>{isExpanded ? '▾' : '▸'}</span>
-                  </div>
-                </div>
+        <div style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
+          padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>Usuarios iniciales</div>
+            <button type="button" onClick={() => setUsers(prev => [...prev, emptyUser()])} style={{
+              height: '32px', padding: '0 12px', borderRadius: 'var(--radius-sm)', background: 'none',
+              border: '1px solid var(--border-input)', color: 'var(--accent-primary)', fontSize: '12px',
+              fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)',
+            }}>
+              + Agregar usuario
+            </button>
+          </div>
 
-                {isExpanded && (
-                  <div style={{ padding: '0 22px 20px', display: 'flex', flexDirection: 'column', gap: '18px', borderTop: '1px solid var(--border-card)' }}>
-                    <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', paddingTop: '16px' }}>
-                      <div>
-                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Plan</div>
-                        <select
-                          value={t.plan}
-                          disabled={isSaving}
-                          onChange={e => updateTenant(t.id, { plan: e.target.value })}
-                          style={{
-                            height: '36px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-panel)',
-                            border: '1px solid var(--border-input)', padding: '0 10px', fontSize: '12.5px',
-                            color: 'var(--text-primary)', fontFamily: 'var(--font)',
-                          }}
-                        >
-                          {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Inteligencia de Mercado</div>
-                        <select
-                          value={hasMi ? 'active' : 'none'}
-                          disabled={isSaving}
-                          onChange={e => updateTenant(t.id, { miPlan: e.target.value === 'active' ? 'active' : 'none' })}
-                          style={{
-                            height: '36px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-panel)',
-                            border: '1px solid var(--border-input)', padding: '0 10px', fontSize: '12.5px',
-                            color: 'var(--text-primary)', fontFamily: 'var(--font)',
-                          }}
-                        >
-                          <option value="none">Sin acceso</option>
-                          <option value="active">Con acceso</option>
-                        </select>
-                      </div>
-                      {isSaving && <div style={{ alignSelf: 'flex-end', fontSize: '11.5px', color: 'var(--text-secondary)' }}>Guardando…</div>}
-                    </div>
-
-                    <div>
-                      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '.04em' }}>
-                        Usuarios
-                      </div>
-                      {t.users.length === 0 ? (
-                        <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>Sin usuarios todavía.</div>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          {t.users.map((u, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12.5px' }}>
-                              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{u.first_name} {u.last_name}</span>
-                              <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-secondary)' }}>{u.email}</span>
-                              <span style={{
-                                padding: '2px 8px', borderRadius: '20px', fontSize: '10.5px', fontWeight: 600,
-                                background: '#EEF1F8', color: 'var(--text-secondary)',
-                              }}>
-                                {ROLE_LABELS[u.role] || u.role}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+          {users.map((u, i) => (
+            <div key={i} style={{
+              display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 0.9fr auto', gap: '10px', alignItems: 'end',
+              paddingBottom: '14px', borderBottom: i < users.length - 1 ? '1px solid var(--border-card)' : 'none',
+            }}>
+              <div>
+                {i === 0 && <div style={labelStyle}>Correo</div>}
+                <input required type="email" value={u.email} onChange={e => updateUser(i, 'email', e.target.value)} placeholder="persona@cliente.com" style={inputStyle} />
               </div>
-            );
-          })}
+              <div>
+                {i === 0 && <div style={labelStyle}>Nombre</div>}
+                <input required value={u.firstName} onChange={e => updateUser(i, 'firstName', e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                {i === 0 && <div style={labelStyle}>Apellido</div>}
+                <input required value={u.lastName} onChange={e => updateUser(i, 'lastName', e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                {i === 0 && <div style={labelStyle}>Rol</div>}
+                <select value={u.role} onChange={e => updateUser(i, 'role', e.target.value)} style={inputStyle}>
+                  {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUsers(prev => prev.filter((_, idx) => idx !== i))}
+                disabled={users.length === 1}
+                style={{
+                  height: '42px', width: '36px', borderRadius: 'var(--radius-sm)', background: 'none',
+                  border: '1px solid var(--border-input)', color: 'var(--alert-text)', cursor: users.length === 1 ? 'not-allowed' : 'pointer',
+                  opacity: users.length === 1 ? 0.4 : 1, fontFamily: 'var(--font)',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {error && (
+          <div style={{ background: 'var(--alert-bg)', color: 'var(--alert-text)', borderRadius: 'var(--radius-md)', padding: '12px 16px', fontSize: '13px' }}>
+            {error}
+          </div>
+        )}
+
+        <button type="submit" disabled={submitting} style={{
+          height: '46px', borderRadius: 'var(--radius-md)', background: 'var(--accent-primary)', color: '#FFFFFF',
+          border: 'none', fontSize: '14px', fontWeight: 700, cursor: submitting ? 'default' : 'pointer',
+          opacity: submitting ? 0.7 : 1, fontFamily: 'var(--font)',
+        }}>
+          {submitting ? 'Creando…' : 'Crear tenant e invitar usuarios'}
+        </button>
+      </form>
+
+      {result && (
+        <div style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
+          padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px',
+        }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+            Tenant creado: {result.tenant.company_name} ({result.tenant.slug})
+          </div>
+          {result.logoError && (
+            <div style={{ fontSize: '13px', color: 'var(--alert-text)' }}>
+              ✗ Logo: no se pudo subir — {result.logoError}
+            </div>
+          )}
+          {result.results.map((r, i) => (
+            <div key={i} style={{ fontSize: '13px', color: r.success ? 'var(--success-text)' : 'var(--alert-text)' }}>
+              {r.success ? '✓' : '✗'} {r.email} {!r.success && `— ${r.step}: ${r.error || 'error desconocido'}`}
+            </div>
+          ))}
         </div>
       )}
     </div>
