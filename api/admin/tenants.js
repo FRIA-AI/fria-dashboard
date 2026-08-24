@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
     const { data: users, error: usersError } = await supabaseAdmin
       .from('tenant_users')
-      .select('tenant_id, email, first_name, last_name, role');
+      .select('id, tenant_id, email, first_name, last_name, role');
 
     if (usersError) {
       return res.status(500).json({ error: 'No se pudieron cargar los usuarios.', details: usersError.message });
