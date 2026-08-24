@@ -34,6 +34,11 @@ export default function AdminTenantsPage() {
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   const [savingId, setSavingId] = useState(null);
+  const [userActionId, setUserActionId] = useState(null); // id del tenant_user en proceso (rol o quitar)
+  const [addFormTenantId, setAddFormTenantId] = useState(null); // tenant con el formulario de "agregar usuario" abierto
+  const [newUser, setNewUser] = useState({ email: '', firstName: '', lastName: '', role: 'sales' });
+  const [addingUser, setAddingUser] = useState(false);
+  const [addUserError, setAddUserError] = useState('');
 
   async function loadTenants() {
     setLoading(true);
@@ -76,6 +81,85 @@ export default function AdminTenantsPage() {
       setSavingId(null);
     }
   }
+
+  async function handleUpdateRole(tenantId, tenantUserId, role) {
+    setUserActionId(tenantUserId);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setUserActionId(null); return; }
+
+    try {
+      await fetch('/api/admin/tenant-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'updateRole', tenantUserId, role }),
+      });
+      setTenants(prev => prev.map(t => t.id !== tenantId ? t : {
+        ...t, users: t.users.map(u => u.id === tenantUserId ? { ...u, role } : u),
+      }));
+    } finally {
+      setUserActionId(null);
+    }
+  }
+
+  async function handleRemoveUser(tenantId, tenantUserId, email) {
+    if (!window.confirm(`¿Quitar a ${email} de este tenant? Ya no podrá entrar a FRIA con esa cuenta para este tenant.`)) return;
+    setUserActionId(tenantUserId);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setUserActionId(null); return; }
+
+    try {
+      await fetch('/api/admin/tenant-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'remove', tenantUserId }),
+      });
+      setTenants(prev => prev.map(t => t.id !== tenantId ? t : {
+        ...t, users: t.users.filter(u => u.id !== tenantUserId),
+      }));
+    } finally {
+      setUserActionId(null);
+    }
+  }
+
+  async function handleAddUser(tenantId) {
+    if (!newUser.email.trim() || !newUser.firstName.trim() || !newUser.lastName.trim()) {
+      setAddUserError('Faltan datos.');
+      return;
+    }
+    setAddingUser(true);
+    setAddUserError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setAddingUser(false); return; }
+
+    try {
+      const res = await fetch('/api/admin/tenant-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'add', tenantId, ...newUser }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAddUserError(data.error || 'No se pudo agregar.');
+        return;
+      }
+      setTenants(prev => prev.map(t => t.id !== tenantId ? t : {
+        ...t,
+        users: [...t.users, {
+          id: crypto.randomUUID?.() || String(Date.now()), // marcador temporal, se corrige al recargar
+          email: newUser.email.trim().toLowerCase(),
+          first_name: newUser.firstName, last_name: newUser.lastName, role: newUser.role,
+        }],
+      }));
+      setNewUser({ email: '', firstName: '', lastName: '', role: 'sales' });
+      setAddFormTenantId(null);
+      loadTenants(); // recarga real para obtener el id definitivo de la fila nueva
+    } catch {
+      setAddUserError('No se pudo conectar con FRIA.');
+    } finally {
+      setAddingUser(false);
+    }
+  }
+
 
   const filtered = tenants.filter(t => {
     if (!search) return true;
@@ -203,25 +287,104 @@ export default function AdminTenantsPage() {
                     </div>
 
                     <div>
-                      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '.04em' }}>
-                        Usuarios
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                          Usuarios
+                        </div>
+                        <button
+                          onClick={() => { setAddFormTenantId(addFormTenantId === t.id ? null : t.id); setAddUserError(''); }}
+                          style={{
+                            background: 'none', border: 'none', color: 'var(--accent-primary)', fontSize: '11.5px',
+                            fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)', padding: 0,
+                          }}
+                        >
+                          {addFormTenantId === t.id ? '✕ Cancelar' : '+ Agregar usuario'}
+                        </button>
                       </div>
+
+                      {addFormTenantId === t.id && (
+                        <div style={{
+                          display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px',
+                          background: 'var(--bg-panel)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-card)',
+                          marginBottom: '12px',
+                        }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 0.9fr', gap: '8px' }}>
+                            <input
+                              placeholder="Correo" value={newUser.email}
+                              onChange={e => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+                              style={{ height: '34px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', border: '1px solid var(--border-input)', padding: '0 8px', fontSize: '12px', color: 'var(--text-primary)', fontFamily: 'var(--font)' }}
+                            />
+                            <input
+                              placeholder="Nombre" value={newUser.firstName}
+                              onChange={e => setNewUser(prev => ({ ...prev, firstName: e.target.value }))}
+                              style={{ height: '34px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', border: '1px solid var(--border-input)', padding: '0 8px', fontSize: '12px', color: 'var(--text-primary)', fontFamily: 'var(--font)' }}
+                            />
+                            <input
+                              placeholder="Apellido" value={newUser.lastName}
+                              onChange={e => setNewUser(prev => ({ ...prev, lastName: e.target.value }))}
+                              style={{ height: '34px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', border: '1px solid var(--border-input)', padding: '0 8px', fontSize: '12px', color: 'var(--text-primary)', fontFamily: 'var(--font)' }}
+                            />
+                            <select
+                              value={newUser.role}
+                              onChange={e => setNewUser(prev => ({ ...prev, role: e.target.value }))}
+                              style={{ height: '34px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', border: '1px solid var(--border-input)', padding: '0 8px', fontSize: '12px', color: 'var(--text-primary)', fontFamily: 'var(--font)' }}
+                            >
+                              {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                            </select>
+                          </div>
+                          {addUserError && <div style={{ fontSize: '11.5px', color: 'var(--alert-text)' }}>{addUserError}</div>}
+                          <button
+                            onClick={() => handleAddUser(t.id)}
+                            disabled={addingUser}
+                            style={{
+                              alignSelf: 'flex-start', height: '32px', padding: '0 14px', borderRadius: 'var(--radius-sm)',
+                              background: 'var(--accent-primary)', border: 'none', color: '#FFFFFF', fontSize: '12px',
+                              fontWeight: 700, cursor: addingUser ? 'default' : 'pointer', opacity: addingUser ? 0.7 : 1,
+                              fontFamily: 'var(--font)',
+                            }}
+                          >
+                            {addingUser ? 'Invitando…' : 'Invitar'}
+                          </button>
+                        </div>
+                      )}
+
                       {t.users.length === 0 ? (
                         <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>Sin usuarios todavía.</div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          {t.users.map((u, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12.5px' }}>
-                              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{u.first_name} {u.last_name}</span>
-                              <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-secondary)' }}>{u.email}</span>
-                              <span style={{
-                                padding: '2px 8px', borderRadius: '20px', fontSize: '10.5px', fontWeight: 600,
-                                background: '#EEF1F8', color: 'var(--text-secondary)',
-                              }}>
-                                {ROLE_LABELS[u.role] || u.role}
-                              </span>
-                            </div>
-                          ))}
+                          {t.users.map((u, i) => {
+                            const isBusy = userActionId === u.id;
+                            return (
+                              <div key={u.id || i} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12.5px', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)', minWidth: '130px' }}>{u.first_name} {u.last_name}</span>
+                                <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-secondary)', minWidth: '180px' }}>{u.email}</span>
+                                <select
+                                  value={u.role}
+                                  disabled={isBusy}
+                                  onChange={e => handleUpdateRole(t.id, u.id, e.target.value)}
+                                  style={{
+                                    height: '28px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-panel)',
+                                    border: '1px solid var(--border-input)', padding: '0 8px', fontSize: '11.5px',
+                                    color: 'var(--text-primary)', fontFamily: 'var(--font)',
+                                  }}
+                                >
+                                  {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                </select>
+                                <button
+                                  onClick={() => handleRemoveUser(t.id, u.id, u.email)}
+                                  disabled={isBusy}
+                                  title="Quitar de este tenant"
+                                  style={{
+                                    background: 'none', border: '1px solid var(--border-input)', borderRadius: 'var(--radius-sm)',
+                                    color: 'var(--alert-text)', fontSize: '11px', cursor: isBusy ? 'default' : 'pointer',
+                                    width: '26px', height: '26px', fontFamily: 'var(--font)',
+                                  }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
