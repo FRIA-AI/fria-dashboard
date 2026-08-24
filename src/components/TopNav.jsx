@@ -157,6 +157,20 @@ export default function TopNav({ user, activeTab, setActiveTab, isFriaStaff }) {
                 Onboarding FRIA
               </button>
             )}
+            {isFriaStaff && (
+              <button
+                onClick={() => { setActiveTab('admin-tenants'); setMenuOpen(false); }}
+                style={{
+                  padding: '9px 12px', borderRadius: 'var(--radius-sm)', fontSize: '13px',
+                  fontWeight: 500, color: 'var(--text-primary)', background: 'none', border: 'none',
+                  cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font)',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-panel)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                Tenants
+              </button>
+            )}
             <button
               onClick={handleLogout}
               style={{
