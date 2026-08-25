@@ -15,6 +15,7 @@ import SettingsPage from './pages/SettingsPage';
 import SellQuotePage from './pages/SellQuotePage';
 import AdminTenantOnboardingPage from './pages/AdminTenantOnboardingPage';
 import AdminTenantsPage from './pages/AdminTenantsPage';
+import PlanesPage from './pages/PlanesPage';
 
 function initials(firstName, lastName) {
   const a = (firstName || '').trim()[0] || '';
@@ -138,6 +139,7 @@ export default function App() {
         {activeTab === 'sell-quote' && <SellQuotePage user={user} context={sellContext} setActiveTab={setActiveTab} />}
         {activeTab === 'admin-onboarding' && isFriaStaff && <AdminTenantOnboardingPage />}
         {activeTab === 'admin-tenants' && isFriaStaff && <AdminTenantsPage />}
+        {activeTab === 'admin-planes' && isFriaStaff && <PlanesPage />}
       </main>
     </div>
   );
