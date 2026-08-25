@@ -1,5 +1,15 @@
 import { supabaseAdmin, resolveFriaStaffFromToken } from '../../lib/resolveTenant.js';
 
+// Copia del lado del servidor de src/lib/plans.js -- a proposito duplicada,
+// nunca hay que confiar en que el navegador mande el acceso correcto para
+// un plan. Si cambian los planes, hay que actualizar los dos archivos.
+const PLAN_ACCESS = {
+  starter: { userLimit: 3, quoteLimit: 100, marketIntelligence: false },
+  growth: { userLimit: 8, quoteLimit: null, marketIntelligence: true },
+  pro: { userLimit: 20, quoteLimit: null, marketIntelligence: true },
+  enterprise: { userLimit: null, quoteLimit: null, marketIntelligence: true },
+};
+
 export default async function handler(req, res) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null;
@@ -38,18 +48,30 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    // Actualiza plan y/o mi_plan de un tenant especifico -- unico cambio que
-    // esta pantalla permite hacer, a proposito: es la accion real que el
-    // staff necesita (dar de alta o subir de plan a un tenant), no un editor
-    // general del tenant.
+    // Al cambiar de plan, se derivan y aplican mi_plan, user_limit, y
+    // monthly_quote_limit en la misma operacion -- nunca se reciben estos 3
+    // directo del cliente, siempre se calculan aqui a partir del plan.
     const { tenantId, plan, miPlan } = req.body || {};
     if (!tenantId) {
       return res.status(400).json({ error: 'Falta tenantId.' });
     }
 
     const updates = {};
-    if (plan !== undefined) updates.plan = plan;
-    if (miPlan !== undefined) updates.mi_plan = miPlan;
+
+    if (plan !== undefined) {
+      if (!PLAN_ACCESS[plan]) {
+        return res.status(400).json({ error: `Plan no reconocido: ${plan}` });
+      }
+      const access = PLAN_ACCESS[plan];
+      updates.plan = plan;
+      updates.mi_plan = access.marketIntelligence ? 'active' : 'none';
+      updates.user_limit = access.userLimit;
+      updates.monthly_quote_limit = access.quoteLimit;
+    } else if (miPlan !== undefined) {
+      // Respaldo -- permite ajustar solo Inteligencia de Mercado sin cambiar
+      // de plan completo, por si algun caso puntual lo necesita.
+      updates.mi_plan = miPlan;
+    }
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'Nada que actualizar.' });
