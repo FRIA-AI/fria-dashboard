@@ -16,6 +16,7 @@ import SellQuotePage from './pages/SellQuotePage';
 import AdminTenantOnboardingPage from './pages/AdminTenantOnboardingPage';
 import AdminTenantsPage from './pages/AdminTenantsPage';
 import PlanesPage from './pages/PlanesPage';
+import { PLAN_DEFINITIONS } from './lib/plans';
 
 function initials(firstName, lastName) {
   const a = (firstName || '').trim()[0] || '';
@@ -64,7 +65,7 @@ export default function App() {
     }
     const { data: profile, error } = await supabase
       .from('tenant_users')
-      .select('id, first_name, last_name, role, email')
+      .select('id, first_name, last_name, role, email, tenants(plan)')
       .eq('auth_user_id', session.user.id)
       .single();
 
@@ -76,8 +77,10 @@ export default function App() {
         email: session.user.email,
         role: 'sales',
         initials: '?',
+        planFeatures: PLAN_DEFINITIONS.starter,
       });
     } else {
+      const planKey = profile.tenants?.plan;
       setUser({
         id: session.user.id,
         tenantUserId: profile.id,
@@ -85,6 +88,9 @@ export default function App() {
         email: profile.email,
         role: profile.role,
         initials: initials(profile.first_name, profile.last_name),
+        // Si el plan no se pudo resolver por alguna razon, se cae al mas
+        // restrictivo (Starter) en vez de dejar pasar accesos de mas.
+        planFeatures: PLAN_DEFINITIONS[planKey] || PLAN_DEFINITIONS.starter,
       });
     }
     setMounted(true);
