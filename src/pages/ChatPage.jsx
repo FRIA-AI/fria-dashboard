@@ -96,6 +96,59 @@ export default function ChatPage({ user }) {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, sending]);
 
+  // Mismo patron de bloqueo suave que Inteligencia de Mercado -- se queda en
+  // el menu para todos los admin, pero la pantalla misma invita a subir de
+  // plan si el tenant no lo incluye. Si por alguna razon planFeatures no
+  // llego (ej. sesion vieja), se asume que no incluye Chat -- el lado
+  // restrictivo, no el permisivo. Este chequeo va DESPUES de todos los
+  // hooks (useState/useEffect) -- React exige que los hooks se llamen
+  // siempre en el mismo orden, nunca de forma condicional.
+  if (!user.planFeatures?.featureChat) {
+    return (
+      <div style={{ padding: '48px var(--page-pad-x)', display: 'flex', justifyContent: 'center' }}>
+        <div style={{
+          maxWidth: '880px', width: '100%', padding: '48px 40px', textAlign: 'center',
+          display: 'flex', flexDirection: 'column', gap: '18px', alignItems: 'center',
+          background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '26px' }}>
+            {[0.4, 0.65, 1, 0.8, 0.55].map((h, i) => (
+              <div key={i} style={{ width: '6px', height: `${h * 100}%`, borderRadius: '1px', background: 'var(--accent-primary)' }} />
+            ))}
+          </div>
+          <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>
+            Chat con FRIA es un plan superior
+          </div>
+          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', maxWidth: '520px', lineHeight: 1.6 }}>
+            Pregúntale a FRIA por rutas, tarifas de mercado, y el desempeño de tus vendedores en lenguaje
+            natural — sin tener que armar una consulta ni salir del chat.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--grid-3col)', gap: '14px', width: '100%', marginTop: '10px' }}>
+            {[
+              ['Consultas de mercado', 'Rango real y tu mejor costo para cualquier ruta, al momento.'],
+              ['Tarifarios y carriers', 'Busca en tu propia base sin salir del chat.'],
+              ['Desempeño de vendedores', 'Quién cotiza más, y en qué rutas, sin abrir Métricas.'],
+            ].map(([t, d], i) => (
+              <div key={i} style={{ textAlign: 'left', padding: '16px 18px', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-md)', background: 'var(--bg-panel)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{t}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '5px' }}>{d}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '12px', marginTop: '14px' }}>
+            <a href="mailto:adolfo.romero@friaai.com" style={{
+              height: '42px', padding: '0 22px', borderRadius: 'var(--radius-md)', background: 'none',
+              border: '1px solid var(--border-input)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600,
+              display: 'flex', alignItems: 'center', textDecoration: 'none',
+            }}>
+              Hablar con ventas
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   async function handleSend(overrideText) {
     const text = (overrideText ?? input).trim();
     if (!text || sending) return;
