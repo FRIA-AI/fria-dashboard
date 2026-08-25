@@ -25,6 +25,29 @@ export default async function handler(req, res) {
     const finalRole = VALID_ROLES.includes(role) ? role : 'sales';
     const dashboardBase = process.env.FRIA_DASHBOARD_URL || 'https://fria-dashboard.vercel.app';
 
+    // Limite de usuarios del plan -- se verifica antes de invitar a nadie,
+    // no despues. null = sin limite (Enterprise).
+    const { data: tenantRow, error: tenantFetchError } = await supabaseAdmin
+      .from('tenants')
+      .select('user_limit')
+      .eq('id', tenantId)
+      .single();
+    if (tenantFetchError || !tenantRow) {
+      return res.status(500).json({ error: 'No se pudo verificar el límite de usuarios.', details: tenantFetchError?.message });
+    }
+    if (tenantRow.user_limit !== null) {
+      const { count, error: countError } = await supabaseAdmin
+        .from('tenant_users')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId);
+      if (countError) {
+        return res.status(500).json({ error: 'No se pudo contar los usuarios actuales.', details: countError.message });
+      }
+      if (count >= tenantRow.user_limit) {
+        return res.status(400).json({ error: `Este tenant ya tiene ${count} de ${tenantRow.user_limit} usuarios incluidos en su plan. Sube de plan para agregar más.` });
+      }
+    }
+
     // Mismo patron que create-tenant.js -- invitar, llenar app_metadata
     // (lo unico que RLS realmente usa), y crear la fila en tenant_users.
     const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
