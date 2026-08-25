@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-
-const PLANS = ['starter', 'growth', 'pro', 'enterprise'];
+import { PLAN_DEFINITIONS, PLAN_ORDER } from '../lib/plans';
 
 const PLAN_BADGE = {
   starter: { bg: '#EEF1F8', color: 'var(--text-secondary)' },
@@ -65,18 +64,27 @@ export default function AdminTenantsPage() {
 
   useEffect(() => { loadTenants(); }, []);
 
-  async function updateTenant(tenantId, updates) {
+  async function handlePlanChange(tenantId, plan) {
     setSavingId(tenantId);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { setSavingId(null); return; }
 
     try {
+      // Solo se manda el plan -- el servidor deriva y aplica mi_plan,
+      // user_limit, y monthly_quote_limit el mismo, para no confiar en que
+      // el navegador mande los valores correctos.
       await fetch('/api/admin/tenants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ tenantId, ...updates }),
+        body: JSON.stringify({ tenantId, plan }),
       });
-      setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, ...(updates.plan !== undefined ? { plan: updates.plan } : {}), ...(updates.miPlan !== undefined ? { mi_plan: updates.miPlan } : {}) } : t));
+      // Actualiza en memoria de inmediato, usando la misma definicion de
+      // planes que ya tiene el frontend -- para reflejo visual instantaneo,
+      // sin esperar una recarga.
+      const def = PLAN_DEFINITIONS[plan];
+      setTenants(prev => prev.map(t => t.id === tenantId
+        ? { ...t, plan, mi_plan: def.marketIntelligence ? 'active' : 'none' }
+        : t));
     } finally {
       setSavingId(null);
     }
@@ -251,39 +259,30 @@ export default function AdminTenantsPage() {
 
                 {isExpanded && (
                   <div style={{ padding: '0 22px 20px', display: 'flex', flexDirection: 'column', gap: '18px', borderTop: '1px solid var(--border-card)' }}>
-                    <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', paddingTop: '16px' }}>
+                    <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'flex-end', paddingTop: '16px' }}>
                       <div>
                         <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Plan</div>
                         <select
                           value={t.plan}
                           disabled={isSaving}
-                          onChange={e => updateTenant(t.id, { plan: e.target.value })}
+                          onChange={e => handlePlanChange(t.id, e.target.value)}
                           style={{
                             height: '36px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-panel)',
                             border: '1px solid var(--border-input)', padding: '0 10px', fontSize: '12.5px',
                             color: 'var(--text-primary)', fontFamily: 'var(--font)',
                           }}
                         >
-                          {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
+                          {PLAN_ORDER.map(p => <option key={p} value={p}>{PLAN_DEFINITIONS[p].label}</option>)}
                         </select>
                       </div>
-                      <div>
-                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Inteligencia de Mercado</div>
-                        <select
-                          value={hasMi ? 'active' : 'none'}
-                          disabled={isSaving}
-                          onChange={e => updateTenant(t.id, { miPlan: e.target.value === 'active' ? 'active' : 'none' })}
-                          style={{
-                            height: '36px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-panel)',
-                            border: '1px solid var(--border-input)', padding: '0 10px', fontSize: '12.5px',
-                            color: 'var(--text-primary)', fontFamily: 'var(--font)',
-                          }}
-                        >
-                          <option value="none">Sin acceso</option>
-                          <option value="active">Con acceso</option>
-                        </select>
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', paddingBottom: '8px' }}>
+                        {PLAN_DEFINITIONS[t.plan]?.userLimit ? `Hasta ${PLAN_DEFINITIONS[t.plan].userLimit} usuarios` : 'Usuarios ilimitados'}
+                        {' · '}
+                        {PLAN_DEFINITIONS[t.plan]?.quoteLimitLabel}
+                        {' · '}
+                        {PLAN_DEFINITIONS[t.plan]?.marketIntelligence ? 'con Inteligencia de Mercado' : 'sin Inteligencia de Mercado'}
                       </div>
-                      {isSaving && <div style={{ alignSelf: 'flex-end', fontSize: '11.5px', color: 'var(--text-secondary)' }}>Guardando…</div>}
+                      {isSaving && <div style={{ alignSelf: 'flex-end', fontSize: '11.5px', color: 'var(--text-secondary)', paddingBottom: '8px' }}>Guardando…</div>}
                     </div>
 
                     <div>
