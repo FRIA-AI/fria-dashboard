@@ -47,7 +47,7 @@ async function fetchNormalizedQuote(rfqId) {
 
 // Busca tarifarios y cotizaciones anteriores vendidas para esta ruta/equipo,
 // SIN esperar a que termine el ciclo de contacto en vivo a carriers (eso es
-// lo que lo hacia lento, y ademas no era confiable -- el webhook a veces
+// lo que hacia lenta la pantalla, y ademas no era confiable -- el webhook a veces
 // responde antes de que ese ciclo termine). Esto solo depende de datos que
 // YA existen en la base, por eso puede correr de inmediato.
 async function fetchComparison(quoteId, originCity, destinationCity, equipmentType) {
@@ -155,6 +155,27 @@ export default function RFQPage({ user, onSellQuote, result, setResult }) {
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState('idle'); // idle | loading | success | error
   const [error, setError] = useState('');
+  const [quota, setQuota] = useState(null); // { withinLimit, used, limit } -- null mientras carga
+
+  useEffect(() => {
+    let active = true;
+    async function loadQuota() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      try {
+        const res = await fetch('/api/check-quote-limit', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const data = await res.json();
+        if (active) setQuota(data);
+      } catch {
+        // si falla la verificacion, no bloqueamos al usuario por un problema
+        // de red -- el chequeo real al enviar es el que de verdad protege
+      }
+    }
+    loadQuota();
+    return () => { active = false; };
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -163,6 +184,30 @@ export default function RFQPage({ user, onSellQuote, result, setResult }) {
     setStatus('loading');
     setError('');
     setResult(null);
+
+    // Verificacion real justo antes de enviar -- no basta con el aviso que
+    // se cargo al abrir la pantalla, pudo haber cambiado (otro usuario del
+    // mismo tenant mando una cotizacion mientras tanto, o paso a otro mes).
+    // Si la verificacion misma falla por un problema de red, se deja pasar
+    // -- es un limite de negocio, no una barrera de seguridad, y bloquear
+    // por un error de red seria peor que dejar pasar una cotizacion de mas.
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const res = await fetch('/api/check-quote-limit', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const freshQuota = await res.json();
+        setQuota(freshQuota);
+        if (freshQuota.withinLimit === false) {
+          setStatus('idle');
+          setError(`Alcanzaste el límite de ${freshQuota.limit} cotizaciones de este mes en tu plan. Contacta a ventas para subir de plan.`);
+          return;
+        }
+      }
+    } catch {
+      // fallo la verificacion misma -- se deja pasar, ver nota arriba
+    }
 
     const now = new Date();
     const timestamp = now.toISOString().slice(0, 19).replace(/[-T:]/g, '');
@@ -209,6 +254,7 @@ export default function RFQPage({ user, onSellQuote, result, setResult }) {
 
       setResult({ rfqId, lane, message, comparison, normalized });
       setStatus('success');
+      setQuota(prev => prev && prev.limit !== null ? { ...prev, used: prev.used + 1, withinLimit: prev.used + 1 < prev.limit } : prev);
       setMessage('');
     } catch (err) {
       setError('No se pudo conectar con FRIA. Intenta de nuevo en un momento.');
@@ -233,6 +279,18 @@ export default function RFQPage({ user, onSellQuote, result, setResult }) {
           Describe la ruta y el equipo en lenguaje natural — FRIA arma el RFQ y contacta a los carriers.
         </div>
       </div>
+
+      {quota && quota.limit !== null && (
+        <div style={{
+          alignSelf: 'center', display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '8px 16px', borderRadius: '20px', fontSize: '12.5px', fontWeight: 600,
+          background: quota.withinLimit ? 'var(--bg-panel)' : 'var(--alert-bg)',
+          color: quota.withinLimit ? 'var(--text-secondary)' : 'var(--alert-text)',
+        }}>
+          {quota.used} / {quota.limit} cotizaciones usadas este mes
+          {!quota.withinLimit && ' · límite alcanzado'}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
         {EXAMPLES.map((ex, i) => (
@@ -264,13 +322,17 @@ export default function RFQPage({ user, onSellQuote, result, setResult }) {
           <div style={{ fontSize: '13px', color: 'var(--alert-text)', textAlign: 'center' }}>{error}</div>
         )}
 
-        <button type="submit" disabled={!message.trim() || status === 'loading'} style={{
-          alignSelf: 'center', height: '46px', padding: '0 30px', borderRadius: 'var(--radius-md)',
-          background: message.trim() ? 'var(--accent-primary)' : 'var(--border-input)',
-          color: message.trim() ? '#FFFFFF' : 'var(--text-secondary)',
-          border: 'none', fontSize: '14px', fontWeight: 700,
-          cursor: message.trim() ? 'pointer' : 'not-allowed', fontFamily: 'var(--font)',
-        }}>
+        <button
+          type="submit"
+          disabled={!message.trim() || status === 'loading' || quota?.withinLimit === false}
+          style={{
+            alignSelf: 'center', height: '46px', padding: '0 30px', borderRadius: 'var(--radius-md)',
+            background: message.trim() && quota?.withinLimit !== false ? 'var(--accent-primary)' : 'var(--border-input)',
+            color: message.trim() && quota?.withinLimit !== false ? '#FFFFFF' : 'var(--text-secondary)',
+            border: 'none', fontSize: '14px', fontWeight: 700,
+            cursor: message.trim() && quota?.withinLimit !== false ? 'pointer' : 'not-allowed', fontFamily: 'var(--font)',
+          }}
+        >
           {status === 'loading' ? 'Enviando…' : 'Enviar a FRIA'}
         </button>
 
