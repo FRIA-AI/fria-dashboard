@@ -263,7 +263,7 @@ export default function RFQPage({ user, onSellQuote, result, setResult }) {
   }
 
   if (result) {
-    return <ComparativaView result={result} userEmail={user.email} onNewQuote={() => { setStatus('idle'); setResult(null); }} onSellQuote={onSellQuote} />;
+    return <ComparativaView result={result} hasMarketIntel={user.planFeatures?.marketIntelligence} onNewQuote={() => { setStatus('idle'); setResult(null); }} onSellQuote={onSellQuote} />;
   }
 
   return (
@@ -337,7 +337,7 @@ export default function RFQPage({ user, onSellQuote, result, setResult }) {
         </button>
 
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center' }}>
-          Enviando como <strong>{user.name}</strong> · el análisis llegará a <strong>{user.email}</strong>
+          Enviando como <strong>{user.name}</strong>
         </div>
       </form>
     </div>
@@ -350,7 +350,7 @@ const SOURCE_BADGE = {
   sin_datos: { label: 'RFQ solicitado', bg: '#F5F5F5', color: 'var(--text-secondary)' },
 };
 
-function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
+function ComparativaView({ result, hasMarketIntel, onNewQuote, onSellQuote }) {
   const comparison = result.comparison || [];
   const cheapest = comparison.find(c => c.price != null);
   const [market, setMarket] = useState(null); // null = cargando o sin dato para esta ruta+equipo
@@ -444,7 +444,7 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
           background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 'var(--radius-lg)',
           padding: '20px 22px', textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)',
         }}>
-          Sin tarifarios ni cotizaciones anteriores en esta ruta. RFQ enviado a los carriers en vivo — el análisis llegará a <strong>{userEmail}</strong> conforme respondan.
+          Sin tarifarios ni cotizaciones anteriores en esta ruta. RFQ enviado a los carriers en vivo — revisa este RFQ en Historial para ver las respuestas conforme lleguen.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -510,7 +510,7 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
             );
           })}
           <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center' }}>
-            Referencia de tarifarios y cotizaciones anteriores — elige el carrier con el que quieras armar la venta. El RFQ en vivo sigue en curso, el análisis con respuestas reales llegará a tu correo.
+            Referencia de tarifarios y cotizaciones anteriores — elige el carrier con el que quieras armar la venta. El RFQ en vivo sigue en curso, revisa Historial para ver las respuestas reales conforme lleguen.
           </div>
         </div>
       )}
@@ -525,20 +525,22 @@ function ComparativaView({ result, userEmail, onNewQuote, onSellQuote }) {
         </button>
       </div>
 
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '20px', padding: '18px 22px',
-        borderRadius: 'var(--radius-lg)', background: 'var(--bg-panel)', border: '1px solid rgba(46,91,168,.3)',
-      }}>
-        <svg width="120" height="46" viewBox="0 0 120 46" style={{ flexShrink: 0, opacity: 0.6 }}>
-          <polyline points="0,36 20,30 40,32 60,18 80,22 100,10 120,14" fill="none" stroke="var(--accent-primary)" strokeWidth="2" />
-        </svg>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Agrega Market Intelligence</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            Ve benchmarks de mercado en tiempo real para esta ruta.
+      {!hasMarketIntel && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '20px', padding: '18px 22px',
+          borderRadius: 'var(--radius-lg)', background: 'var(--bg-panel)', border: '1px solid rgba(46,91,168,.3)',
+        }}>
+          <svg width="120" height="46" viewBox="0 0 120 46" style={{ flexShrink: 0, opacity: 0.6 }}>
+            <polyline points="0,36 20,30 40,32 60,18 80,22 100,10 120,14" fill="none" stroke="var(--accent-primary)" strokeWidth="2" />
+          </svg>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Agrega Market Intelligence</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Ve benchmarks de mercado en tiempo real para esta ruta.
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
