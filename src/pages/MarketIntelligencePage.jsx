@@ -47,7 +47,9 @@ export default function MarketIntelligencePage({ user }) {
   const [loading, setLoading] = useState(true);
   const [miPlan, setMiPlan] = useState(null);
   const [allRoutes, setAllRoutes] = useState([]);
-  const [selectedKey, setSelectedKey] = useState('');
+  const [selectedOrigin, setSelectedOrigin] = useState('');
+  const [selectedDestination, setSelectedDestination] = useState('');
+  const [selectedEquipment, setSelectedEquipment] = useState('');
   const [reliability, setReliability] = useState(null);
   const [ownOptions, setOwnOptions] = useState([]);
 
@@ -73,7 +75,11 @@ export default function MarketIntelligencePage({ user }) {
       const routes = Object.entries(latestByLane).map(([key, r]) => ({ key, ...r }))
         .sort((a, b) => (b.sources?.point_count || 0) - (a.sources?.point_count || 0));
       setAllRoutes(routes);
-      if (routes.length) setSelectedKey(routes[0].key);
+      if (routes.length) {
+        setSelectedOrigin(routes[0].origin_city);
+        setSelectedDestination(routes[0].destination_city);
+        setSelectedEquipment(routes[0].equipment_type);
+      }
 
       const { data: rel } = await supabase
         .from('frai_reliability')
@@ -88,7 +94,45 @@ export default function MarketIntelligencePage({ user }) {
     load();
   }, [user?.tenantUserId]);
 
-  const selected = allRoutes.find(r => r.key === selectedKey);
+  const selected = allRoutes.find(r =>
+    r.origin_city === selectedOrigin && r.destination_city === selectedDestination && r.equipment_type === selectedEquipment
+  );
+
+  // Listas para cada uno de los 3 campos -- cada una se recorta segun lo que
+  // ya se eligio antes (Destino solo muestra pares reales con el Origen
+  // elegido; Equipo solo muestra los que existen para ese Origen+Destino).
+  const uniqueOrigins = useMemo(() => {
+    const set = new Set(allRoutes.map(r => r.origin_city));
+    return [...set].sort((a, b) => cityLabel(a).localeCompare(cityLabel(b)));
+  }, [allRoutes]);
+
+  const destinationOptions = useMemo(() => {
+    const set = new Set(allRoutes.filter(r => r.origin_city === selectedOrigin).map(r => r.destination_city));
+    return [...set].sort((a, b) => cityLabel(a).localeCompare(cityLabel(b)));
+  }, [allRoutes, selectedOrigin]);
+
+  const equipmentOptions = useMemo(() => {
+    const set = new Set(allRoutes.filter(r => r.origin_city === selectedOrigin && r.destination_city === selectedDestination).map(r => r.equipment_type));
+    return [...set].sort((a, b) => equipLabel(a).localeCompare(equipLabel(b)));
+  }, [allRoutes, selectedOrigin, selectedDestination]);
+
+  // Al cambiar Origen, Destino y Equipo se reacomodan al primer valor real
+  // disponible para la nueva combinacion -- para nunca dejar seleccionada
+  // una pareja que no existe en los datos.
+  function handleOriginChange(newOrigin) {
+    setSelectedOrigin(newOrigin);
+    const dests = [...new Set(allRoutes.filter(r => r.origin_city === newOrigin).map(r => r.destination_city))];
+    const newDest = dests[0] || '';
+    setSelectedDestination(newDest);
+    const eqs = [...new Set(allRoutes.filter(r => r.origin_city === newOrigin && r.destination_city === newDest).map(r => r.equipment_type))];
+    setSelectedEquipment(eqs[0] || '');
+  }
+
+  function handleDestinationChange(newDest) {
+    setSelectedDestination(newDest);
+    const eqs = [...new Set(allRoutes.filter(r => r.origin_city === selectedOrigin && r.destination_city === newDest).map(r => r.equipment_type))];
+    setSelectedEquipment(eqs[0] || '');
+  }
 
   useEffect(() => {
     async function loadOwn() {
@@ -122,7 +166,7 @@ export default function MarketIntelligencePage({ user }) {
       setOwnOptions(Object.values(byCarrier));
     }
     loadOwn();
-  }, [selectedKey]);
+  }, [selectedOrigin, selectedDestination, selectedEquipment]);
 
   const bestOwnPrice = ownOptions.length ? Math.min(...ownOptions.map(o => o.price)) : null;
   const bestOwnCarrier = ownOptions.find(o => o.price === bestOwnPrice);
@@ -199,17 +243,38 @@ export default function MarketIntelligencePage({ user }) {
     <div style={{ padding: '48px var(--page-pad-x)', display: 'flex', flexDirection: 'column', gap: '22px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
         <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>Inteligencia de Mercado</div>
-        <select value={selectedKey} onChange={e => setSelectedKey(e.target.value)} style={{
-          height: '38px', borderRadius: 'var(--radius-md)', background: 'var(--bg-card)',
-          border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px',
-          color: 'var(--text-primary)', fontFamily: 'var(--font)', minWidth: '260px',
-        }}>
-          {allRoutes.map(r => (
-            <option key={r.key} value={r.key}>
-              {cityLabel(r.origin_city)} → {cityLabel(r.destination_city)} · {equipLabel(r.equipment_type)}
-            </option>
-          ))}
-        </select>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '.04em' }}>Origen</div>
+            <select value={selectedOrigin} onChange={e => handleOriginChange(e.target.value)} style={{
+              height: '38px', borderRadius: 'var(--radius-md)', background: 'var(--bg-card)',
+              border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px',
+              color: 'var(--text-primary)', fontFamily: 'var(--font)', minWidth: '160px',
+            }}>
+              {uniqueOrigins.map(o => <option key={o} value={o}>{cityLabel(o)}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '.04em' }}>Destino</div>
+            <select value={selectedDestination} onChange={e => handleDestinationChange(e.target.value)} style={{
+              height: '38px', borderRadius: 'var(--radius-md)', background: 'var(--bg-card)',
+              border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px',
+              color: 'var(--text-primary)', fontFamily: 'var(--font)', minWidth: '160px',
+            }}>
+              {destinationOptions.map(d => <option key={d} value={d}>{cityLabel(d)}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '.04em' }}>Equipo</div>
+            <select value={selectedEquipment} onChange={e => setSelectedEquipment(e.target.value)} style={{
+              height: '38px', borderRadius: 'var(--radius-md)', background: 'var(--bg-card)',
+              border: '1px solid var(--border-input)', padding: '0 12px', fontSize: '13px',
+              color: 'var(--text-primary)', fontFamily: 'var(--font)', minWidth: '160px',
+            }}>
+              {equipmentOptions.map(eq => <option key={eq} value={eq}>{equipLabel(eq)}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div style={{
@@ -292,7 +357,7 @@ export default function MarketIntelligencePage({ user }) {
         <TRow header cols={['Ruta', 'Equipo', 'Mediana', 'Rango', 'Datos', 'Fuentes', 'Tendencia']} />
         {allRoutes.map((r, i) => (
           <TRow key={i} cols={[
-            <span key="lane" style={{ fontWeight: 600, cursor: 'pointer' }} onClick={() => setSelectedKey(r.key)}>
+            <span key="lane" style={{ fontWeight: 600, cursor: 'pointer' }} onClick={() => { setSelectedOrigin(r.origin_city); setSelectedDestination(r.destination_city); setSelectedEquipment(r.equipment_type); }}>
               {cityLabel(r.origin_city)} → {cityLabel(r.destination_city)}
             </span>,
             <span key="eq" style={{ color: 'var(--text-secondary)' }}>{equipLabel(r.equipment_type)}</span>,
@@ -317,4 +382,3 @@ export default function MarketIntelligencePage({ user }) {
     </div>
   );
 }
- 
