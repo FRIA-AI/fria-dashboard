@@ -4,8 +4,6 @@ import { supabase } from '../supabaseClient';
 import { fetchMarketRate, pctVsMarket } from '../lib/frai';
 import { VsMarketPill, SourcesBadge } from '../components/FraiWidgets';
 
-const N8N_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fria-envio-rfq';
-
 const EXAMPLES = [
   'Monterrey a Laredo, dry van, 2 unidades',
   'Veracruz a CDMX, 40HC, 1 unidad',
@@ -228,9 +226,16 @@ export default function RFQPage({ user, onSellQuote, result, setResult }) {
       // El RFQ real (correos a carriers) se manda sin esperarlo -- eso es lo
       // que hacia lenta la pantalla. Empezamos a buscar la fila normalizada
       // de inmediato, en paralelo, no despues de que termine todo el flujo.
-      fetch(N8N_WEBHOOK_URL, {
+      // Pasa por /api/trigger-rfq (en vez de llamar a n8n directo) para que
+      // el secreto compartido se agregue del lado del servidor -- el
+      // navegador nunca lo ve.
+      const { data: { session: sendSession } } = await supabase.auth.getSession();
+      fetch('/api/trigger-rfq', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sendSession?.access_token}`,
+        },
         body: JSON.stringify(payload),
       }).then(res => {
         console.log('[FRIA] Webhook respondió, status:', res.status, '(rfqId enviado:', rfqId, ')');
