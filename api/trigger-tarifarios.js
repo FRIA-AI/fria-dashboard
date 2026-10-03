@@ -1,13 +1,24 @@
 import { resolveTenantFromToken } from '../lib/resolveTenant.js';
 
-// Se desactiva el parser automatico de Vercel para poder leer el cuerpo
-// crudo (multipart, con el archivo adentro) y reenviarlo tal cual a n8n,
-// sin tener que descomponerlo y reconstruirlo aqui.
+// Este endpoint recibe un archivo (multipart/form-data), así que Vercel NO
+// debe intentar parsear el body como JSON -- lo leemos crudo y lo
+// reenviamos tal cual a n8n, agregando el secreto compartido del lado del
+// servidor. El Content-Type original (con el boundary del multipart) se
+// reenvía sin tocar, si no, n8n no puede volver a separar los campos.
 export const config = {
   api: { bodyParser: false },
 };
 
 const N8N_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fria-tarifarios';
+
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -22,11 +33,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const rawBody = Buffer.concat(chunks);
-
   try {
+    const rawBody = await readRawBody(req);
     const n8nRes = await fetch(N8N_URL, {
       method: 'POST',
       headers: {
