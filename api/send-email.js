@@ -122,8 +122,20 @@ async function getDisplayName(tenantId, smtpConfig) {
   return 'FRIA'; // ultimo respaldo -- nunca debe tronar por falta de nombre
 }
 
+// Los headers de correo deben ser ASCII puro (RFC 5322). Si el nombre del
+// remitente trae acentos, "ñ", guiones largos, etc., hay que codificarlo
+// como encoded-word RFC 2047 -- igual que ya haciamos con el Subject --
+// o el cliente de correo que lo recibe lo interpreta con el charset
+// equivocado y lo muestra corrupto (mojibake).
+function encodeFromHeader(displayName, email) {
+  const isAscii = /^[\x00-\x7F]*$/.test(displayName);
+  if (isAscii) return `"${displayName}" <${email}>`;
+  const b64 = Buffer.from(displayName, 'utf-8').toString('base64');
+  return `=?UTF-8?B?${b64}?= <${email}>`;
+}
+
 async function sendViaGmailApi({ accessToken, fromDisplayName, fromEmail, to, cc, replyTo, subject, html }) {
-  const headers = [`From: "${fromDisplayName}" <${fromEmail}>`, `To: ${to}`];
+  const headers = [`From: ${encodeFromHeader(fromDisplayName, fromEmail)}`, `To: ${to}`];
   if (cc) headers.push(`Cc: ${cc}`);
   headers.push(`Reply-To: ${replyTo || fromEmail}`);
   headers.push(`Subject: =?UTF-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`);
