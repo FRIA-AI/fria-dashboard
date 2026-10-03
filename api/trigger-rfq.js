@@ -1,12 +1,13 @@
 import { supabaseAdmin, resolveTenantFromToken } from '../lib/resolveTenant.js';
 
+// Proxy autenticado hacia el webhook de n8n que dispara el envío de RFQ a
+// carriers. El navegador nunca ve FRIA_INTERNAL_SECRET -- lo agrega este
+// endpoint del lado del servidor, después de verificar que quien llama
+// tiene una sesión real de Supabase (resolveTenantFromToken). Así el
+// webhook de n8n puede exigir el secreto (Header Auth) sin que el secreto
+// tenga que vivir en código que corre en el navegador.
 const N8N_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fria-envio-rfq';
 
-// Proxy del lado del servidor hacia el webhook de n8n -- el navegador nunca
-// llama a n8n directo, ni conoce el secreto compartido. Solo un usuario con
-// sesion real de FRIA puede llegar hasta aqui, y el correo se toma del
-// token verificado, no de lo que mande el cuerpo de la peticion (para que
-// nadie pueda mandar un RFQ haciendose pasar por otro usuario del tenant).
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -20,9 +21,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // UserEmail se re-verifica contra el token real en vez de confiar en lo
+  // que mande el body -- mismo criterio que el resto de los endpoints.
   const { data: userData } = await supabaseAdmin.auth.getUser(token);
   const verifiedEmail = userData?.user?.email || req.body?.UserEmail;
-
   const payload = { ...req.body, UserEmail: verifiedEmail };
 
   try {
