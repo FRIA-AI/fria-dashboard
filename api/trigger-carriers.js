@@ -1,10 +1,22 @@
 import { resolveTenantFromToken } from '../lib/resolveTenant.js';
 
+// Mismo patrón que trigger-tarifarios.js: archivo subido como
+// multipart/form-data, se reenvía crudo a n8n con el secreto agregado del
+// lado del servidor.
 export const config = {
   api: { bodyParser: false },
 };
 
 const N8N_URL = 'https://roadnlmx.app.n8n.cloud/webhook/carrier-ingestion';
+
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -19,11 +31,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const rawBody = Buffer.concat(chunks);
-
   try {
+    const rawBody = await readRawBody(req);
     const n8nRes = await fetch(N8N_URL, {
       method: 'POST',
       headers: {
