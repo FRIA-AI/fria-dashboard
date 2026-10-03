@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-
-const CHAT_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fria-chat';
+import { supabase } from '../supabaseClient';
 
 function equipLabel(e) {
   return (e || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -160,9 +159,15 @@ export default function ChatPage({ user }) {
     setError('');
 
     try {
-      const res = await fetch(CHAT_WEBHOOK_URL, {
+      // Pasa por /api/trigger-chat (en vez de llamar a n8n directo) para
+      // que el secreto compartido se agregue del lado del servidor.
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/trigger-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
         body: JSON.stringify({
           message: text,
           // el historial ANTES de este mensaje -- solo prosa, sin los datos
