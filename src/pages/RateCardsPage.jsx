@@ -37,7 +37,7 @@ const TabBar = ({ tab, setTab }) => (
   </div>
 );
 
-const TARIFARIO_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fria-tarifarios';
+const TARIFARIO_WEBHOOK_URL = '/api/trigger-tarifarios';
 
 export default function RateCardsPage({ user }) {
   const [tab, setTab] = useState('Tarifarios');
@@ -137,7 +137,12 @@ export default function RateCardsPage({ user }) {
       formData.append('geography', geography);
       formData.append('originalFileName', file.name);
 
-      const res = await fetch(TARIFARIO_WEBHOOK_URL, { method: 'POST', body: formData });
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(TARIFARIO_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: formData,
+      });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const data = await res.json();
       setUploadResult(data);
