@@ -1,9 +1,10 @@
 import { supabaseAdmin, resolveTenantFromToken } from '../lib/resolveTenant.js';
 
+// Mismo patrón que trigger-rfq.js: el navegador llama aquí con su sesión de
+// Supabase, este endpoint verifica esa sesión y recién entonces reenvía la
+// pregunta a n8n con el secreto compartido agregado del lado del servidor.
 const N8N_URL = 'https://roadnlmx.app.n8n.cloud/webhook/fria-chat';
 
-// Mismo patron que trigger-rfq.js -- el navegador llama aqui, nunca a n8n
-// directo. El secreto compartido solo existe del lado del servidor.
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -19,7 +20,6 @@ export default async function handler(req, res) {
 
   const { data: userData } = await supabaseAdmin.auth.getUser(token);
   const verifiedEmail = userData?.user?.email || req.body?.userEmail;
-
   const payload = { ...req.body, userEmail: verifiedEmail };
 
   try {
@@ -34,6 +34,6 @@ export default async function handler(req, res) {
     const data = await n8nRes.json();
     return res.status(n8nRes.status).json(data);
   } catch (e) {
-    return res.status(502).json({ error: 'No se pudo conectar con el Chat.' });
+    return res.status(502).json({ error: 'No se pudo conectar con FRIA.' });
   }
 }
