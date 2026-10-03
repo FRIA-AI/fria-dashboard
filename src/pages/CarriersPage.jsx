@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-const CARRIER_WEBHOOK_URL = 'https://roadnlmx.app.n8n.cloud/webhook/carrier-ingestion';
+const CARRIER_WEBHOOK_URL = '/api/trigger-carriers';
 
 const GEO_LABELS = {
   domestic_mx: 'Doméstico MX',
@@ -80,7 +80,12 @@ export default function CarriersPage({ user }) {
       formData.append('data', file);
       formData.append('uploaderEmail', user.email);
 
-      const res = await fetch(CARRIER_WEBHOOK_URL, { method: 'POST', body: formData });
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(CARRIER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: formData,
+      });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const data = await res.json();
       setResult(data);
