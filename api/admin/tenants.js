@@ -64,7 +64,10 @@ export default async function handler(req, res) {
       }
       const access = PLAN_ACCESS[plan];
       updates.plan = plan;
-      updates.mi_plan = access.marketIntelligence ? 'active' : 'none';
+      // mi_plan es un enum (mi_tier): none | mi_basic | mi_standard | mi_pro.
+      // Hoy la app solo distingue 'none' de cualquier otro valor, y todos los
+      // tenants con acceso usan mi_pro.
+      updates.mi_plan = access.marketIntelligence ? 'mi_pro' : 'none';
       updates.user_limit = access.userLimit;
       updates.monthly_quote_limit = access.quoteLimit;
     } else if (miPlan !== undefined) {
