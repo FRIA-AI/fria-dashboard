@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
+import { hasValidInternalSecret } from '../lib/verifyInternalSecret.js';
 
 // Este endpoint es llamado por n8n para mandar un correo usando la
 // configuracion real del tenant correspondiente. Intenta primero OAuth
@@ -188,8 +189,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const authHeader = req.headers['x-fria-secret'];
-  if (authHeader !== process.env.FRIA_INTERNAL_SECRET) {
+  if (!hasValidInternalSecret(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
