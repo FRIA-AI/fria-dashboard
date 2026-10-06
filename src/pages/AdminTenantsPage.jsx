@@ -64,8 +64,21 @@ export default function AdminTenantsPage() {
 
   useEffect(() => { loadTenants(); }, []);
 
+  // Lee la respuesta del servidor y regresa un mensaje de error legible, o
+  // null si salio bien. Antes los cambios se reflejaban en pantalla aunque el
+  // servidor los hubiera rechazado, y quedaba una pantalla que decia una cosa
+  // y la base de datos otra.
+  async function readServerError(res, fallback) {
+    if (res.ok) return null;
+    let body = {};
+    try { body = await res.json(); } catch { /* respuesta sin JSON */ }
+    const detail = body.details ? ` (${body.details})` : '';
+    return `${body.error || fallback}${detail}`;
+  }
+
   async function handlePlanChange(tenantId, plan) {
     setSavingId(tenantId);
+    setError('');
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { setSavingId(null); return; }
 
@@ -73,18 +86,23 @@ export default function AdminTenantsPage() {
       // Solo se manda el plan -- el servidor deriva y aplica mi_plan,
       // user_limit, y monthly_quote_limit el mismo, para no confiar en que
       // el navegador mande los valores correctos.
-      await fetch('/api/admin/tenants', {
+      const res = await fetch('/api/admin/tenants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ tenantId, plan }),
       });
-      // Actualiza en memoria de inmediato, usando la misma definicion de
-      // planes que ya tiene el frontend -- para reflejo visual instantaneo,
-      // sin esperar una recarga.
+      const serverError = await readServerError(res, 'No se pudo cambiar el plan.');
+      if (serverError) {
+        setError(serverError);
+        return; // no se toca la pantalla: el plan sigue siendo el que esta en la base
+      }
+      // Solo si el servidor confirmo, se refleja el cambio en pantalla.
       const def = PLAN_DEFINITIONS[plan];
       setTenants(prev => prev.map(t => t.id === tenantId
-        ? { ...t, plan, mi_plan: def.marketIntelligence ? 'active' : 'none' }
+        ? { ...t, plan, mi_plan: def.marketIntelligence ? 'mi_pro' : 'none' }
         : t));
+    } catch {
+      setError('No se pudo conectar con FRIA.');
     } finally {
       setSavingId(null);
     }
@@ -95,15 +113,20 @@ export default function AdminTenantsPage() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { setUserActionId(null); return; }
 
+    setError('');
     try {
-      await fetch('/api/admin/tenant-users', {
+      const res = await fetch('/api/admin/tenant-users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ action: 'updateRole', tenantUserId, role }),
       });
+      const serverError = await readServerError(res, 'No se pudo cambiar el rol.');
+      if (serverError) { setError(serverError); return; }
       setTenants(prev => prev.map(t => t.id !== tenantId ? t : {
         ...t, users: t.users.map(u => u.id === tenantUserId ? { ...u, role } : u),
       }));
+    } catch {
+      setError('No se pudo conectar con FRIA.');
     } finally {
       setUserActionId(null);
     }
@@ -115,15 +138,20 @@ export default function AdminTenantsPage() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { setUserActionId(null); return; }
 
+    setError('');
     try {
-      await fetch('/api/admin/tenant-users', {
+      const res = await fetch('/api/admin/tenant-users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ action: 'remove', tenantUserId }),
       });
+      const serverError = await readServerError(res, 'No se pudo quitar al usuario.');
+      if (serverError) { setError(serverError); return; }
       setTenants(prev => prev.map(t => t.id !== tenantId ? t : {
         ...t, users: t.users.filter(u => u.id !== tenantUserId),
       }));
+    } catch {
+      setError('No se pudo conectar con FRIA.');
     } finally {
       setUserActionId(null);
     }
