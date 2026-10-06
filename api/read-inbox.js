@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { hasValidInternalSecret } from '../lib/verifyInternalSecret.js';
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
@@ -358,8 +359,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const authHeader = req.headers['x-fria-secret'];
-  if (authHeader !== process.env.FRIA_INTERNAL_SECRET) {
+  if (!hasValidInternalSecret(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
