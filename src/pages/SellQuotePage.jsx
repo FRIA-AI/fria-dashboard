@@ -53,10 +53,37 @@ const CONDICIONES_GENERALES = [
   'Tránsito en zonas de alto riesgo se debe revisar antes de despachar la unidad.',
 ];
 
+// Escapa texto antes de meterlo en el HTML de la vista previa. Todo lo que
+// llega aqui puede venir de un usuario (cliente, condiciones, terminos) o de
+// datos externos (ciudades de una cotizacion), y la vista previa se pinta con
+// dangerouslySetInnerHTML: sin escapar, un nombre de cliente como
+// <img src=x onerror=...> ejecutaria codigo dentro de la sesion de FRIA.
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Para la URL del logo: solo http(s), y ya escapada para usarse dentro de un
+// atributo. Cualquier otra cosa (javascript:, data:, etc.) se descarta.
+function safeImageUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    return escapeHtml(u.href);
+  } catch {
+    return null;
+  }
+}
+
 function buildQuoteHtml({ folio, cliente, vendedor, origin, destination, equipment, rate, currency, validUntil, transitDays, condiciones, logoUrl, terms }) {
-  const equipmentLabel = (equipment || '—').replace(/_/g, ' ').toUpperCase();
+  const equipmentLabel = escapeHtml((equipment || '—').replace(/_/g, ' ').toUpperCase());
   const termsList = terms && terms.length ? terms : CONDICIONES_GENERALES;
-  const conditionsHtml = termsList.map(c => `<li style="break-inside:avoid;margin-bottom:3px">${c}</li>`).join('');
+  const conditionsHtml = termsList.map(c => `<li style="break-inside:avoid;margin-bottom:3px">${escapeHtml(c)}</li>`).join('');
+  const safeLogo = logoUrl ? safeImageUrl(logoUrl) : null;
 
   return `
   <div style="width:700px;background:#FFFFFF;font-family:'Inter',Arial,sans-serif;padding:0;box-sizing:border-box;">
@@ -65,8 +92,8 @@ function buildQuoteHtml({ folio, cliente, vendedor, origin, destination, equipme
 
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="display:flex;align-items:center;gap:12px">
-          ${logoUrl ? `
-          <img src="${logoUrl}" alt="Logo cliente" style="max-height:40px;max-width:180px;object-fit:contain" />
+          ${safeLogo ? `
+          <img src="${safeLogo}" alt="Logo cliente" style="max-height:40px;max-width:180px;object-fit:contain" />
           ` : `
           <div style="display:flex;align-items:flex-end;gap:3px;height:22px">
             <div style="width:6px;height:40%;background:#0A0F1F;border-radius:1px"></div>
@@ -85,7 +112,7 @@ function buildQuoteHtml({ folio, cliente, vendedor, origin, destination, equipme
           <div style="font-size:9px;font-weight:600;color:#5C6B8A;letter-spacing:.06em;text-transform:uppercase">Fecha</div>
           <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#0A0F1F;margin-top:2px">${todayLabel()}</div>
           <div style="font-size:9px;font-weight:600;color:#5C6B8A;letter-spacing:.06em;text-transform:uppercase;margin-top:8px">Folio</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#0A0F1F;margin-top:2px">${folio}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#0A0F1F;margin-top:2px">${escapeHtml(folio)}</div>
         </div>
       </div>
 
@@ -95,38 +122,38 @@ function buildQuoteHtml({ folio, cliente, vendedor, origin, destination, equipme
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:22px">
         <div>
           <div style="font-size:10px;font-weight:700;color:#5C6B8A;letter-spacing:.06em;text-transform:uppercase">Cliente</div>
-          <div style="font-size:15px;font-weight:600;color:#0A0F1F;margin-top:4px">${cliente || '—'}</div>
+          <div style="font-size:15px;font-weight:600;color:#0A0F1F;margin-top:4px">${escapeHtml(cliente || '—')}</div>
         </div>
         <div>
           <div style="font-size:10px;font-weight:700;color:#5C6B8A;letter-spacing:.06em;text-transform:uppercase">Vendedor</div>
-          <div style="font-size:15px;font-weight:600;color:#0A0F1F;margin-top:4px">${vendedor || '—'}</div>
+          <div style="font-size:15px;font-weight:600;color:#0A0F1F;margin-top:4px">${escapeHtml(vendedor || '—')}</div>
         </div>
       </div>
 
       <div style="margin-top:26px;padding:20px 22px;background:#F5F8FD;border:1px solid rgba(10,15,31,.08);border-radius:10px">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="font-size:19px;font-weight:700;color:#0A0F1F">${origin} <span style="color:#4D8EFF">&#8594;</span> ${destination}</div>
+          <div style="font-size:19px;font-weight:700;color:#0A0F1F">${escapeHtml(origin)} <span style="color:#4D8EFF">&#8594;</span> ${escapeHtml(destination)}</div>
           <div style="display:inline-flex;align-items:center;padding:5px 12px;border-radius:20px;background:#EAF0FB;border:1px solid rgba(10,15,31,.08);font-size:11px;font-weight:700;color:#2E5BA8;letter-spacing:.02em">${equipmentLabel}</div>
         </div>
       </div>
 
       <div style="margin-top:14px;padding:18px 24px;background:linear-gradient(135deg,#EAF0FB,#F5F8FD);border:1.5px solid #4D8EFF;border-radius:12px">
         <div style="font-size:10px;font-weight:700;color:#2E5BA8;letter-spacing:.06em;text-transform:uppercase">Tarifa cotizada</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:700;color:#0A0F1F;margin-top:4px;letter-spacing:-.01em">$${rate.toLocaleString()} <span style="font-size:15px;font-weight:600;color:#5C6B8A">${currency}</span></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:700;color:#0A0F1F;margin-top:4px;letter-spacing:-.01em">$${Number(rate).toLocaleString()} <span style="font-size:15px;font-weight:600;color:#5C6B8A">${escapeHtml(currency)}</span></div>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(10,15,31,.08)">
         <div>
           <div style="font-size:9.5px;font-weight:700;color:#5C6B8A;letter-spacing:.06em;text-transform:uppercase">Vigencia</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#0A0F1F;margin-top:4px">${validUntil ? `Hasta ${validUntil}` : '—'}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#0A0F1F;margin-top:4px">${validUntil ? `Hasta ${escapeHtml(validUntil)}` : '—'}</div>
         </div>
         <div>
           <div style="font-size:9.5px;font-weight:700;color:#5C6B8A;letter-spacing:.06em;text-transform:uppercase">Tránsito estimado</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#0A0F1F;margin-top:4px">${transitDays ? `${transitDays} día${transitDays == 1 ? '' : 's'}` : '—'}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#0A0F1F;margin-top:4px">${transitDays ? `${escapeHtml(transitDays)} día${transitDays == 1 ? '' : 's'}` : '—'}</div>
         </div>
         <div>
           <div style="font-size:9.5px;font-weight:700;color:#5C6B8A;letter-spacing:.06em;text-transform:uppercase">Condiciones de pago</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#0A0F1F;margin-top:4px">${condiciones || '—'}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#0A0F1F;margin-top:4px">${escapeHtml(condiciones || '—')}</div>
         </div>
       </div>
 
