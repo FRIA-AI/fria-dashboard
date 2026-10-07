@@ -119,7 +119,7 @@ async function fetchReferenceByCarrier(quoteId, originCity, destinationCity, equ
   Object.keys(bestRateCardByCarrier).forEach(carrierId => {
     const rc = bestRateCardByCarrier[carrierId];
     byCarrier[carrierId] = {
-      source: 'tarifario', price: Number(rc.base_rate),
+      source: 'tarifario', price: Number(rc.base_rate), validUntil: rc.valid_until || null,
       detail: rc.valid_until ? `Vigente hasta ${rc.valid_until}` : 'Tarifario de referencia',
     };
   });
@@ -260,6 +260,11 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
             const liveStatus = r.live ? (RFQ_STATUS_MAP[r.live.status] || RFQ_STATUS_MAP.sent) : null;
             const bestPrice = r.live?.status === 'responded' && r.live.quoted_rate ? Number(r.live.quoted_rate) : r.reference?.price ?? null;
             const bestCarrierName = r.name;
+            // La vigencia debe corresponder a la misma tarifa que se muestra/vende:
+            // si el carrier cotizo en vivo, solo cuenta SU vigencia (no la del tarifario).
+            const usesLiveRate = r.live?.status === 'responded' && !!r.live.quoted_rate;
+            const validityDate = usesLiveRate ? (r.live.valid_until || null) : (r.reference?.validUntil || null);
+            const validityIsReference = !usesLiveRate && !!r.reference?.validUntil;
             return (
               <DetalleRow key={i} cols={[
                 <span key="name" style={{ fontWeight: 600 }}>{r.name}</span>,
@@ -291,8 +296,13 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
                 <span key="transit" style={{ color: r.live?.transit_days ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
                   {r.live?.transit_days ? `${r.live.transit_days} ${Number(r.live.transit_days) === 1 ? 'día' : 'días'}` : '—'}
                 </span>,
-                <span key="valid" style={{ color: r.live?.valid_until ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                  {r.live?.valid_until ? r.live.valid_until : '—'}
+                <span key="valid" style={{ color: validityDate ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                  {validityDate ? (
+                    <>
+                      {validityDate}
+                      {validityIsReference && <span style={{ display: 'block', fontSize: '10px', color: 'var(--text-secondary)' }}>tarifario</span>}
+                    </>
+                  ) : '—'}
                 </span>,
                 <span key="action">
                   {bestPrice != null && onSellQuote && (
@@ -304,7 +314,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
                       carrierName: bestCarrierName,
                       baseRate: bestPrice,
                       currency: (r.live?.status === 'responded' && r.live.quoted_currency) || 'MXN',
-                      validUntil: r.live?.valid_until || null,
+                      validUntil: validityDate,
                       transitDays: r.live?.transit_days || null,
                       quoteId: quote.id,
                       returnTo: 'history',
