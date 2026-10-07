@@ -49,7 +49,7 @@ const HistorialRow = ({ header, cols }) => (
 
 const DetalleRow = ({ header, cols }) => (
   <div style={{
-    display: 'grid', gridTemplateColumns: 'minmax(140px, 1.3fr) minmax(120px, 1fr) minmax(110px, 1fr) minmax(120px, 1fr) minmax(110px, 1fr) minmax(90px, 0.8fr)',
+    display: 'grid', gridTemplateColumns: 'minmax(140px, 1.3fr) minmax(120px, 1fr) minmax(110px, 1fr) minmax(120px, 1fr) minmax(130px, 1fr) minmax(90px, 0.8fr) minmax(100px, 0.8fr) minmax(90px, 0.8fr)',
     padding: header ? '12px 22px' : '14px 22px',
     background: '#FFFFFF',
     borderTop: header ? 'none' : '1px solid var(--border-card)',
@@ -154,7 +154,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
     async function load() {
       const { data: liveRfqs, error } = await supabase
         .from('quote_rfqs')
-        .select('carrier_id, status, quoted_rate, valid_until, transit_days, carrier_notes, carriers(name)')
+        .select('carrier_id, status, quoted_rate, quoted_currency, valid_until, transit_days, carrier_notes, carriers(name)')
         .eq('quote_id', quote.id);
       if (error) { setLoading(false); return; }
 
@@ -254,7 +254,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
       ) : (
         <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
-          <DetalleRow header cols={['Carrier', 'Origen', 'Tarifa referencia', 'RFQ', 'Tarifa cotizada', '']} />
+          <DetalleRow header cols={['Carrier', 'Origen', 'Tarifa referencia', 'RFQ', 'Tarifa cotizada', 'Tránsito', 'Vigencia', '']} />
           {rows.map((r, i) => {
             const originBadge = r.reference ? ORIGIN_BADGE[r.reference.source] : null;
             const liveStatus = r.live ? (RFQ_STATUS_MAP[r.live.status] || RFQ_STATUS_MAP.sent) : null;
@@ -286,7 +286,13 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
                   fontFamily: 'var(--mono)',
                   color: r.live?.quoted_rate ? 'var(--success-text)' : 'var(--text-secondary)',
                 }}>
-                  {r.live?.quoted_rate ? `$${Number(r.live.quoted_rate).toLocaleString()}` : '—'}
+                  {r.live?.quoted_rate ? `$${Number(r.live.quoted_rate).toLocaleString()} ${r.live.quoted_currency || ''}` : '—'}
+                </span>,
+                <span key="transit" style={{ color: r.live?.transit_days ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                  {r.live?.transit_days ? `${r.live.transit_days} ${Number(r.live.transit_days) === 1 ? 'día' : 'días'}` : '—'}
+                </span>,
+                <span key="valid" style={{ color: r.live?.valid_until ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                  {r.live?.valid_until ? r.live.valid_until : '—'}
                 </span>,
                 <span key="action">
                   {bestPrice != null && onSellQuote && (
@@ -297,7 +303,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
                       equipment: quote.equipment_type,
                       carrierName: bestCarrierName,
                       baseRate: bestPrice,
-                      currency: 'MXN',
+                      currency: (r.live?.status === 'responded' && r.live.quoted_currency) || 'MXN',
                       validUntil: r.live?.valid_until || null,
                       transitDays: r.live?.transit_days || null,
                       quoteId: quote.id,
