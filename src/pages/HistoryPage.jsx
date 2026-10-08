@@ -265,8 +265,10 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
             const usesLiveRate = r.live?.status === 'responded' && !!r.live.quoted_rate;
             const validityDate = usesLiveRate ? (r.live.valid_until || null) : (r.reference?.validUntil || null);
             const validityIsReference = !usesLiveRate && !!r.reference?.validUntil;
+            const carrierNotes = r.live?.carrier_notes ? String(r.live.carrier_notes).trim() : '';
             return (
-              <DetalleRow key={i} cols={[
+              <div key={i}>
+              <DetalleRow cols={[
                 <span key="name" style={{ fontWeight: 600 }}>{r.name}</span>,
                 <span key="origin">
                   {originBadge ? (
@@ -328,6 +330,15 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
                   )}
                 </span>,
               ]} />
+              {carrierNotes && (
+                <div style={{
+                  padding: '0 22px 12px', background: '#FFFFFF',
+                  fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5,
+                }}>
+                  <span style={{ fontWeight: 600 }}>Notas del carrier:</span> {carrierNotes}
+                </div>
+              )}
+              </div>
             );
           })}
           </div>
