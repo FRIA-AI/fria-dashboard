@@ -26,6 +26,28 @@ const FRIA_NOTIFICATION_SUBJECT_PREFIXES = [
   'FRIA — Contacto de respaldo agregado',
 ];
 
+// --- Cola de correos entrantes ------------------------------------------
+// Los marcadores de cada proveedor (historyId de Gmail, delta link de Microsoft,
+// flag "leido" de IMAP) avanzan SOLO despues de guardar el correo en esta cola.
+// n8n confirma (api/ack-inbox) cuando termina de procesar; mientras no confirme,
+// el correo se vuelve a entregar en la siguiente corrida (maximo MAX_ATTEMPTS).
+const MAX_ATTEMPTS = 5;
+const MAX_BATCH = 50;
+
+async function enqueueInbound(tenantId, provider, items) {
+  if (!items.length) return;
+  const rows = items.map((it) => ({
+    tenant_id: tenantId,
+    provider,
+    message_id: String(it.messageId),
+    payload: { subject: it.subject, from: it.from, text: it.text },
+  }));
+  const { error } = await supabaseAdmin
+    .from('inbound_emails')
+    .upsert(rows, { onConflict: 'tenant_id,provider,message_id', ignoreDuplicates: true });
+  if (error) throw new Error(`enqueue failed: ${error.message}`);
+}
+
 async function refreshGoogleAccessToken(oauth) {
   const resp = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -170,6 +192,9 @@ async function processGoogleTenantInbox(oauth) {
     });
   }
 
+  // Primero se guarda en la cola; solo despues avanza el marcador.
+  await enqueueInbound(oauth.tenant_id, 'google', results);
+
   await supabaseAdmin.from('tenant_email_oauth')
     .update({ last_history_id: newHistoryId, updated_at: new Date().toISOString() })
     .eq('tenant_id', oauth.tenant_id).eq('provider', 'google');
@@ -269,11 +294,11 @@ async function processMicrosoftTenantInbox(oauth) {
     if (data['@odata.deltaLink']) newDeltaLink = data['@odata.deltaLink'];
   }
 
-  await supabaseAdmin.from('tenant_email_oauth')
+  const saveDeltaLink = () => supabaseAdmin.from('tenant_email_oauth')
     .update({ last_history_id: newDeltaLink, updated_at: new Date().toISOString() })
     .eq('tenant_id', oauth.tenant_id).eq('provider', 'microsoft');
 
-  if (isFirstSync) return results; // solo se establecio el punto de partida
+  if (isFirstSync) { await saveDeltaLink(); return results; } // solo se establecio el punto de partida
 
   for (const msg of rawMessages) {
     if (msg.isDraft) continue;
@@ -296,6 +321,10 @@ async function processMicrosoftTenantInbox(oauth) {
     });
   }
 
+  // Primero se guarda en la cola; solo despues avanza el delta link.
+  await enqueueInbound(oauth.tenant_id, 'microsoft', results);
+  await saveDeltaLink();
+
   return results;
 }
 
@@ -316,6 +345,7 @@ async function processImapTenantInbox(config) {
     await client.connect();
     const lock = await client.getMailboxLock('INBOX');
     try {
+      const seenUids = [];
       const uids = await client.search({ seen: false });
       for (const uid of uids) {
         const { content } = await client.download(uid);
@@ -336,10 +366,12 @@ async function processImapTenantInbox(config) {
           });
         }
 
-        // Se marca como leido en cualquier caso (sea RFQ o no) para no
-        // volver a revisarlo la proxima corrida.
-        await client.messageFlagsAdd(uid, ['\\Seen']);
+        // Se marca como leido en cualquier caso (sea RFQ o no) para no volver a
+        // revisarlo -- pero solo DESPUES de guardar los RFQ en la cola.
+        seenUids.push(uid);
       }
+      await enqueueInbound(config.tenant_id, 'imap', results);
+      for (const uid of seenUids) await client.messageFlagsAdd(uid, ['\\Seen']);
     } finally {
       lock.release();
     }
@@ -373,13 +405,12 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to load tenant connections', details: error.message });
   }
 
-  const allResults = [];
+  // 1) Bajar correos nuevos de cada proveedor -- cada rama los guarda en la
+  //    cola (inbound_emails) antes de avanzar su marcador.
   for (const oauth of connections) {
     try {
-      const items = oauth.provider === 'microsoft'
-        ? await processMicrosoftTenantInbox(oauth)
-        : await processGoogleTenantInbox(oauth);
-      allResults.push(...items);
+      if (oauth.provider === 'microsoft') await processMicrosoftTenantInbox(oauth);
+      else await processGoogleTenantInbox(oauth);
     } catch (e) {
       console.error(`read-inbox error for tenant ${oauth.tenant_id} (${oauth.provider}):`, e);
     }
@@ -396,12 +427,39 @@ export default async function handler(req, res) {
 
   for (const config of smtpConfigs || []) {
     try {
-      const items = await processImapTenantInbox(config);
-      allResults.push(...items);
+      await processImapTenantInbox(config);
     } catch (e) {
       console.error(`read-inbox error for tenant ${config.tenant_id} (imap):`, e);
     }
   }
 
-  return res.status(200).json(allResults);
+  // 2) Los que ya agotaron sus intentos pasan a 'failed' (visibles para revision).
+  await supabaseAdmin.from('inbound_emails')
+    .update({ status: 'failed', last_error: 'max attempts reached' })
+    .eq('status', 'pending').gte('attempts', MAX_ATTEMPTS);
+
+  // 3) Se entrega a n8n todo lo pendiente: nuevos + los que fallaron antes.
+  const { data: pending, error: pendingError } = await supabaseAdmin
+    .from('inbound_emails')
+    .select('id, tenant_id, provider, message_id, payload, attempts')
+    .eq('status', 'pending')
+    .lt('attempts', MAX_ATTEMPTS)
+    .order('created_at', { ascending: true })
+    .limit(MAX_BATCH);
+
+  if (pendingError) {
+    return res.status(500).json({ error: 'Failed to load inbound queue' });
+  }
+
+  await Promise.all((pending || []).map((r) =>
+    supabaseAdmin.from('inbound_emails').update({ attempts: r.attempts + 1 }).eq('id', r.id)
+  ));
+
+  return res.status(200).json((pending || []).map((r) => ({
+    ...r.payload,
+    tenant_id: r.tenant_id,
+    messageId: r.message_id,
+    provider: r.provider,
+    inbox_id: r.id,
+  })));
 }
