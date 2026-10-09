@@ -177,43 +177,22 @@ export default function CarriersPage({ user }) {
       )}
 
       {status === 'success' && result && (
-        <div style={{
-          background: 'var(--success-bg)', border: '1px solid var(--success-text)', borderRadius: 'var(--radius-lg)',
-          padding: '18px 22px', display: 'flex', gap: '32px', flexWrap: 'wrap',
-        }}>
-          <div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: 'var(--success-text)' }}>{result.inserted}</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>nuevos</div>
-          </div>
-          <div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>{result.updated}</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>actualizados</div>
-          </div>
-          <div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: result.errorCount > 0 ? 'var(--alert-text)' : 'var(--text-secondary)' }}>{result.errorCount}</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>errores</div>
-          </div>
-        </div>
-      )}
-
-      {loadingList ? (
-        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
-      ) : (
-        <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-          <CRow header cols={['Carrier', 'Servicio', 'Equipo', 'Cruces', 'Correo']} />
-          {carriers.map(c => (
-            <CRow key={c.id} cols={[
-              <span key="n" style={{ fontWeight: 600 }}>{c.name}</span>,
-              <span key="g" style={{ color: 'var(--text-tertiary)' }}>{formatGeo(c.geographies)}</span>,
-              <span key="e" style={{ color: 'var(--text-tertiary)' }}>{formatEquipment(c.equipment_types)}</span>,
-              <span key="x" style={{ color: 'var(--text-tertiary)' }}>{formatCrossings(c.crossings)}</span>,
-              <span key="m" style={{ fontFamily: 'var(--mono)', color: 'var(--text-secondary)' }}>{c.email || '—'}</span>,
-            ]} />
-          ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+        <>
+          <div style={{
+            background: 'var(--success-bg)', border: '1px solid var(--success-text)', borderRadius: 'var(--radius-lg)',
+            padding: '18px 22px', display: 'flex', gap: '32px', flexWrap: 'wrap',
+          }}>
+            <div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: 'var(--success-text)' }}>{result.inserted}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>nuevos</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>{result.updated}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>actualizados</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: result.errorCount > 0 ? 'var(--alert-text)' : 'var(--text-secondary)' }}>{result.errorCount}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>errores</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700,
