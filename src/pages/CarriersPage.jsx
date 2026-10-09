@@ -14,6 +14,11 @@ function formatEquipment(arr) {
   return arr.map(e => e.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(' / ');
 }
 
+function formatCrossings(arr) {
+  if (!arr || !arr.length) return '—';
+  return arr.map(k => k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(' / ');
+}
+
 function formatGeo(arr) {
   if (!arr || !arr.length) return '—';
   return arr.map(g => GEO_LABELS[g] || g).join(' / ');
@@ -21,7 +26,7 @@ function formatGeo(arr) {
 
 const CRow = ({ header, cols }) => (
   <div style={{
-    display: 'grid', gridTemplateColumns: '1.3fr 1.3fr 1.2fr 1.5fr',
+    display: 'grid', gridTemplateColumns: '1.3fr 1.3fr 1.2fr 1.1fr 1.5fr',
     padding: header ? '12px 22px' : '16px 22px',
     background: '#FFFFFF',
     borderTop: header ? 'none' : '1px solid var(--border-card)',
@@ -50,7 +55,7 @@ export default function CarriersPage({ user }) {
     setLoadingList(true);
     const { data, error } = await supabase
       .from('carriers')
-      .select('id, name, geographies, equipment_types, email')
+      .select('id, name, geographies, equipment_types, crossings, email')
       .eq('is_active', true)
       .order('name', { ascending: true });
     if (!error && data) setCarriers(data);
@@ -196,12 +201,13 @@ export default function CarriersPage({ user }) {
       ) : (
         <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
-          <CRow header cols={['Carrier', 'Servicio', 'Equipo', 'Correo']} />
+          <CRow header cols={['Carrier', 'Servicio', 'Equipo', 'Cruces', 'Correo']} />
           {carriers.map(c => (
             <CRow key={c.id} cols={[
               <span key="n" style={{ fontWeight: 600 }}>{c.name}</span>,
               <span key="g" style={{ color: 'var(--text-tertiary)' }}>{formatGeo(c.geographies)}</span>,
               <span key="e" style={{ color: 'var(--text-tertiary)' }}>{formatEquipment(c.equipment_types)}</span>,
+              <span key="x" style={{ color: 'var(--text-tertiary)' }}>{formatCrossings(c.crossings)}</span>,
               <span key="m" style={{ fontFamily: 'var(--mono)', color: 'var(--text-secondary)' }}>{c.email || '—'}</span>,
             ]} />
           ))}
