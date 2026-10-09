@@ -195,4 +195,57 @@ export default function CarriersPage({ user }) {
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>errores</div>
             </div>
             <div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700,
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: result.warningCount > 0 ? 'var(--alert-text)' : 'var(--text-secondary)' }}>{result.warningCount || 0}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>con avisos de ubicación</div>
+            </div>
+          </div>
+
+          {result.warnings && result.warnings.length > 0 && (
+            <div style={{
+              background: '#FFFFFF', border: '1px solid var(--alert-text)', borderRadius: 'var(--radius-lg)',
+              padding: '16px 22px', display: 'flex', flexDirection: 'column', gap: '10px',
+            }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--alert-text)' }}>
+                Revisa estos patios: no cuentan bien para la búsqueda por cercanía
+              </div>
+              {result.warnings.map((w, i) => (
+                <div key={i} style={{ fontSize: '12px', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                  <span style={{ fontWeight: 600 }}>{w.carrier}</span>
+                  {w.unknown?.length > 0 && (
+                    <div style={{ color: 'var(--text-secondary)' }}>
+                      Lugar no reconocido: {w.unknown.join(', ')}
+                    </div>
+                  )}
+                  {w.areas?.length > 0 && (
+                    <div style={{ color: 'var(--text-secondary)' }}>
+                      Patio a nivel estado/región (poco preciso): {w.areas.join(', ')}. Mejor usa una ciudad.
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {loadingList ? (
+        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cargando…</div>
+      ) : (
+        <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-card)', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+          <CRow header cols={['Carrier', 'Servicio', 'Equipo', 'Cruces', 'Correo']} />
+          {carriers.map(c => (
+            <CRow key={c.id} cols={[
+              <span key="n" style={{ fontWeight: 600 }}>{c.name}</span>,
+              <span key="g" style={{ color: 'var(--text-tertiary)' }}>{formatGeo(c.geographies)}</span>,
+              <span key="e" style={{ color: 'var(--text-tertiary)' }}>{formatEquipment(c.equipment_types)}</span>,
+              <span key="x" style={{ color: 'var(--text-tertiary)' }}>{formatCrossings(c.crossings)}</span>,
+              <span key="m" style={{ fontFamily: 'var(--mono)', color: 'var(--text-secondary)' }}>{c.email || '—'}</span>,
+            ]} />
+          ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
