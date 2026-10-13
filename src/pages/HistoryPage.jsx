@@ -29,6 +29,11 @@ function timeAgo(iso) {
   return `hace ${days} días`;
 }
 
+// MXN primero, luego USD, luego otras (nunca se mezclan ni se convierten).
+function currencyRank(c) {
+  return c === 'MXN' ? 0 : c === 'USD' ? 1 : 2;
+}
+
 // Definidas ANTES de usarse, como const -- no dependemos de hoisting de function declarations.
 const HistorialRow = ({ header, cols }) => (
   <div style={{
@@ -75,7 +80,7 @@ async function fetchReferenceByCarrier(quoteId, originCity, destinationCity, equ
 
   const { data: rateCardsData } = await supabase
     .from('rate_cards')
-    .select('carrier_id, base_rate, valid_until')
+    .select('carrier_id, base_rate, valid_until, currency')
     .eq('equipment_type', equipmentType)
     .eq('is_active', true)
     .or(`valid_until.is.null,valid_until.gte.${today}`)
@@ -84,7 +89,7 @@ async function fetchReferenceByCarrier(quoteId, originCity, destinationCity, equ
 
   const { data: historicalQuotes } = await supabase
     .from('quotes')
-    .select('sell_price, created_at, selected_rfq_id')
+    .select('sell_price, sell_currency, created_at, selected_rfq_id')
     .neq('id', quoteId)
     .eq('equipment_type', equipmentType)
     .ilike('origin_city', `%${originCity}%`)
@@ -101,11 +106,25 @@ async function fetchReferenceByCarrier(quoteId, originCity, destinationCity, equ
     (winningRfqs || []).forEach(r => { carrierByRfqId[r.id] = r.carrier_id; });
   }
 
-  const bestRateCardByCarrier = {};
+  // Tarifario mas barato por carrier Y moneda (no se comparan MXN con USD).
+  const bestRateCardByCarrierCurrency = {};
   (rateCardsData || []).forEach(r => {
-    const current = bestRateCardByCarrier[r.carrier_id];
-    if (!current || Number(r.base_rate) < Number(current.base_rate)) bestRateCardByCarrier[r.carrier_id] = r;
+    const currency = r.currency || 'MXN';
+    const key = `${r.carrier_id}|${currency}`;
+    const current = bestRateCardByCarrierCurrency[key];
+    if (!current || Number(r.base_rate) < Number(current.base_rate)) {
+      bestRateCardByCarrierCurrency[key] = { ...r, currency };
+    }
   });
+  // Por carrier: la referencia principal es la de MXN si existe (si no, la
+  // primera moneda disponible); las demas monedas viajan en `others`.
+  const bestRateCardByCarrier = {};
+  Object.values(bestRateCardByCarrierCurrency)
+    .sort((a, b) => currencyRank(a.currency) - currencyRank(b.currency))
+    .forEach(r => {
+      if (!bestRateCardByCarrier[r.carrier_id]) bestRateCardByCarrier[r.carrier_id] = { ...r, others: [] };
+      else bestRateCardByCarrier[r.carrier_id].others.push(r);
+    });
 
   const bestHistoricalByCarrier = {};
   (historicalQuotes || []).forEach(q => {
@@ -119,14 +138,15 @@ async function fetchReferenceByCarrier(quoteId, originCity, destinationCity, equ
   Object.keys(bestRateCardByCarrier).forEach(carrierId => {
     const rc = bestRateCardByCarrier[carrierId];
     byCarrier[carrierId] = {
-      source: 'tarifario', price: Number(rc.base_rate), validUntil: rc.valid_until || null,
+      source: 'tarifario', price: Number(rc.base_rate), currency: rc.currency, validUntil: rc.valid_until || null,
+      others: rc.others.map(o => ({ price: Number(o.base_rate), currency: o.currency, validUntil: o.valid_until || null })),
       detail: rc.valid_until ? `Vigente hasta ${rc.valid_until}` : 'Tarifario de referencia',
     };
   });
   Object.keys(bestHistoricalByCarrier).forEach(carrierId => {
     if (byCarrier[carrierId]) return; // el tarifario ya manda si existe
     const h = bestHistoricalByCarrier[carrierId];
-    byCarrier[carrierId] = { source: 'cotizacion_anterior', price: Number(h.sell_price), detail: `Cotización de hace ${timeAgo(h.created_at)}` };
+    byCarrier[carrierId] = { source: 'cotizacion_anterior', price: Number(h.sell_price), currency: h.sell_currency || 'MXN', detail: `Cotización de hace ${timeAgo(h.created_at)}` };
   });
 
   return byCarrier;
@@ -213,7 +233,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
         }}>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 700, color: status === 'sold' ? 'var(--success-text)' : '#B36B00' }}>
-              {status === 'sold' ? 'Venta cerrada' : 'Cotizado'} · ${Number(quote.sell_price).toLocaleString()} MXN
+              {status === 'sold' ? 'Venta cerrada' : 'Cotizado'} · ${Number(quote.sell_price).toLocaleString()} {quote.sell_currency || 'MXN'}
             </div>
             {quote.sell_pdf_generated_at && (
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
@@ -279,7 +299,12 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
                   ) : <span style={{ color: 'var(--text-secondary)' }}>—</span>}
                 </span>,
                 <span key="refprice" style={{ fontFamily: 'var(--mono)', color: r.reference ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                  {r.reference ? `$${r.reference.price.toLocaleString()}` : '—'}
+                  {r.reference ? `$${r.reference.price.toLocaleString()} ${r.reference.currency || 'MXN'}` : '—'}
+                  {(r.reference?.others || []).map((o, k) => (
+                    <span key={k} style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      + ${o.price.toLocaleString()} {o.currency}
+                    </span>
+                  ))}
                 </span>,
                 <span key="live">
                   {liveStatus ? (
@@ -315,7 +340,7 @@ const DetalleRFQ = ({ quote, onBack, onSellQuote }) => {
                       equipment: quote.equipment_type,
                       carrierName: bestCarrierName,
                       baseRate: bestPrice,
-                      currency: (r.live?.status === 'responded' && r.live.quoted_currency) || 'MXN',
+                      currency: usesLiveRate ? (r.live.quoted_currency || 'MXN') : (r.reference?.currency || 'MXN'),
                       validUntil: validityDate,
                       transitDays: r.live?.transit_days || null,
                       quoteId: quote.id,
@@ -360,7 +385,7 @@ export default function HistoryPage({ user, onSellQuote }) {
 
       const { data: quotesData, error: quotesError } = await supabase
         .from('quotes')
-        .select('id, quote_number, origin_city, destination_city, equipment_type, status, created_at, sell_price, sell_pdf_url, sell_pdf_generated_at')
+        .select('id, quote_number, origin_city, destination_city, equipment_type, status, created_at, sell_price, sell_currency, sell_pdf_url, sell_pdf_generated_at')
         .eq('requested_by', user.tenantUserId)
         .order('created_at', { ascending: false });
 
@@ -372,19 +397,24 @@ export default function HistoryPage({ user, onSellQuote }) {
       if (quoteIds.length) {
         const { data: rfqData } = await supabase
           .from('quote_rfqs')
-          .select('quote_id, quoted_rate, status')
+          .select('quote_id, quoted_rate, quoted_currency, status')
           .in('quote_id', quoteIds)
           .eq('status', 'responded');
 
+        // Mejor tarifa por cotizacion: se compara solo dentro de una misma
+        // moneda; si hay respuestas en varias, se muestra la de MXN primero.
         (rfqData || []).forEach(r => {
           if (!r.quoted_rate) return;
-          if (!ratesByQuote[r.quote_id] || r.quoted_rate < ratesByQuote[r.quote_id]) {
-            ratesByQuote[r.quote_id] = r.quoted_rate;
-          }
+          const currency = r.quoted_currency || 'MXN';
+          const current = ratesByQuote[r.quote_id];
+          const better = !current
+            || currencyRank(currency) < currencyRank(current.currency)
+            || (currency === current.currency && Number(r.quoted_rate) < Number(current.rate));
+          if (better) ratesByQuote[r.quote_id] = { rate: r.quoted_rate, currency };
         });
       }
 
-      setRows(quotesData.map(q => ({ ...q, bestRate: ratesByQuote[q.id] || null })));
+      setRows(quotesData.map(q => ({ ...q, bestRate: ratesByQuote[q.id]?.rate ?? null, bestRateCurrency: ratesByQuote[q.id]?.currency || null })));
       setLoading(false);
     }
     load();
@@ -447,7 +477,7 @@ export default function HistoryPage({ user, onSellQuote }) {
                     background: st.bg, color: st.color,
                   }}>{st.label}</span>,
                   <span key="rate" style={{ fontFamily: 'var(--mono)', color: q.bestRate ? 'var(--success-text)' : 'var(--text-secondary)' }}>
-                    {q.bestRate ? `$${q.bestRate.toLocaleString()}` : '—'}
+                    {q.bestRate ? `$${Number(q.bestRate).toLocaleString()} ${q.bestRateCurrency || 'MXN'}` : '—'}
                   </span>,
                   <span key="date" style={{ color: 'var(--text-secondary)' }}>{timeAgo(q.created_at)}</span>,
                   <span key="chev" style={{ color: 'var(--accent-primary)' }}>›</span>,
