@@ -19,6 +19,11 @@ function timeAgo(iso) {
   return `hace ${days} días`;
 }
 
+// Orden de monedas en la comparativa: MXN primero, luego USD, luego otras.
+function currencyRank(c) {
+  return c === 'MXN' ? 0 : c === 'USD' ? 1 : 2;
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -104,14 +109,19 @@ async function fetchComparison(quoteId, originCity, destinationCity, equipmentTy
   const namesById = {};
   (carriersData || []).forEach(c => { namesById[c.id] = c.name; });
 
-  // Tarifario mas barato por carrier
+  // Tarifario mas barato por carrier Y moneda: un carrier puede tener
+  // tarifas en MXN y en USD para la misma ruta, y nunca se comparan entre si
+  // (no hay conversion de moneda).
   const bestRateCardByCarrier = {};
   (rateCardsData || []).forEach(r => {
-    const current = bestRateCardByCarrier[r.carrier_id];
+    const currency = r.currency || 'MXN';
+    const key = `${r.carrier_id}|${currency}`;
+    const current = bestRateCardByCarrier[key];
     if (!current || Number(r.base_rate) < Number(current.base_rate)) {
-      bestRateCardByCarrier[r.carrier_id] = r;
+      bestRateCardByCarrier[key] = { ...r, currency };
     }
   });
+  const carriersWithRateCard = new Set((rateCardsData || []).map(r => r.carrier_id));
 
   // Cotizacion vendida mas reciente por carrier
   const bestHistoricalByCarrier = {};
@@ -126,24 +136,28 @@ async function fetchComparison(quoteId, originCity, destinationCity, equipmentTy
 
   // PRIORIDAD: el tarifario manda si existe para ese carrier. La cotizacion
   // anterior solo se usa si el carrier NO tiene tarifario.
-  const result = [...allCarrierIds].map(carrierId => {
-    const rateCard = bestRateCardByCarrier[carrierId];
-    if (rateCard) {
-      return {
-        name: namesById[carrierId] || 'Carrier',
-        price: Number(rateCard.base_rate),
-        source: 'tarifario',
-        detail: rateCard.valid_until ? `Tarifario · vigente hasta ${rateCard.valid_until}` : 'Tarifario de referencia',
-      };
+  const result = [...allCarrierIds].flatMap(carrierId => {
+    if (carriersWithRateCard.has(carrierId)) {
+      // Una fila por cada moneda en la que el carrier tiene tarifario.
+      return Object.values(bestRateCardByCarrier)
+        .filter(rc => rc.carrier_id === carrierId)
+        .map(rc => ({
+          name: namesById[carrierId] || 'Carrier',
+          price: Number(rc.base_rate),
+          currency: rc.currency,
+          source: 'tarifario',
+          detail: rc.valid_until ? `Tarifario · vigente hasta ${rc.valid_until}` : 'Tarifario de referencia',
+        }));
     }
     const historical = bestHistoricalByCarrier[carrierId];
-    return {
+    return [{
       name: namesById[carrierId] || 'Carrier',
       price: Number(historical.sell_price),
+      currency: historical.sell_currency || 'MXN',
       source: 'cotizacion_anterior',
       detail: `Sin tarifario · cotización anterior · ${timeAgo(historical.created_at)}`,
-    };
-  }).sort((a, b) => a.price - b.price);
+    }];
+  }).sort((a, b) => currencyRank(a.currency) - currencyRank(b.currency) || a.price - b.price);
 
   console.log('[FRIA] Comparativa final (tarifario > cotización anterior, deduplicada por carrier):', result);
   return result;
@@ -357,7 +371,15 @@ const SOURCE_BADGE = {
 
 function ComparativaView({ result, hasMarketIntel, onNewQuote, onSellQuote }) {
   const comparison = result.comparison || [];
-  const cheapest = comparison.find(c => c.price != null);
+  // "Mas economica" se marca por moneda: nunca se compara MXN contra USD.
+  const cheapestByCurrency = {};
+  comparison.forEach(c => {
+    if (c.price == null) return;
+    const cur = c.currency || 'MXN';
+    if (!cheapestByCurrency[cur]) cheapestByCurrency[cur] = c;
+  });
+  const currenciesShown = Object.keys(cheapestByCurrency);
+  const isCheapestOf = c => c.price != null && cheapestByCurrency[c.currency || 'MXN'] === c;
   const [market, setMarket] = useState(null); // null = cargando o sin dato para esta ruta+equipo
 
   useEffect(() => {
@@ -372,7 +394,10 @@ function ComparativaView({ result, hasMarketIntel, onNewQuote, onSellQuote }) {
     return () => { active = false; };
   }, [result.normalized?.origin_city, result.normalized?.destination_city, result.normalized?.equipment_type]);
 
+  // El indice FRAI de mercado esta en MXN, asi que solo se compara contra
+  // tarifas en MXN.
   const anyAboveMarket = market && comparison.some(c => {
+    if ((c.currency || 'MXN') !== 'MXN') return false;
     const pct = pctVsMarket(c.price, market.frai_value);
     return pct != null && pct > 5;
   });
@@ -386,7 +411,7 @@ function ComparativaView({ result, hasMarketIntel, onNewQuote, onSellQuote }) {
       equipment: result.normalized?.equipment_type || null,
       carrierName: c.name,
       baseRate: c.price || 0,
-      currency: 'MXN',
+      currency: c.currency || 'MXN',
       validUntil: null,
       transitDays: null,
       quoteId: result.normalized?.id || null,
@@ -454,7 +479,7 @@ function ComparativaView({ result, hasMarketIntel, onNewQuote, onSellQuote }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {comparison.map((c, i) => {
-            const isCheapest = c === cheapest;
+            const isCheapest = isCheapestOf(c);
             const badge = SOURCE_BADGE[c.source];
             return (
               <div key={i} style={{
@@ -482,7 +507,7 @@ function ComparativaView({ result, hasMarketIntel, onNewQuote, onSellQuote }) {
                     color: isCheapest ? 'var(--success-text)' : 'var(--text-secondary)',
                     fontWeight: isCheapest ? 600 : 400,
                   }}>
-                    {isCheapest ? 'Más económica · ' : ''}{c.detail}
+                    {isCheapest ? (currenciesShown.length > 1 ? `Más económica en ${c.currency || 'MXN'} · ` : 'Más económica · ') : ''}{c.detail}
                   </div>
                 </div>
                 <div style={{
@@ -490,10 +515,15 @@ function ComparativaView({ result, hasMarketIntel, onNewQuote, onSellQuote }) {
                   color: isCheapest ? 'var(--success-text)' : 'var(--text-tertiary)',
                 }}>
                   {c.price != null ? `$${c.price.toLocaleString()}` : '—'}
+                  {c.price != null && (
+                    <span style={{ fontSize: '11px', fontWeight: 600, marginLeft: '6px', color: 'var(--text-secondary)' }}>
+                      {c.currency || 'MXN'}
+                    </span>
+                  )}
                 </div>
                 {market && (
                   <div style={{ minWidth: '70px', textAlign: 'center' }}>
-                    <VsMarketPill pct={pctVsMarket(c.price, market.frai_value)} />
+                    <VsMarketPill pct={(c.currency || 'MXN') === 'MXN' ? pctVsMarket(c.price, market.frai_value) : null} />
                   </div>
                 )}
                 {c.price != null && (
