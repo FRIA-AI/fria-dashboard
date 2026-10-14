@@ -200,6 +200,30 @@ export default function CarriersPage({ user }) {
             </div>
           </div>
 
+          {result.errorList && String(result.errorList).trim() !== '' && (
+            <div style={{
+              background: '#FFFFFF', border: '1px solid var(--alert-text)', borderRadius: 'var(--radius-lg)',
+              padding: '16px 22px', display: 'flex', flexDirection: 'column', gap: '10px',
+            }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--alert-text)' }}>
+                No se cargaron estos carriers: corrige el archivo y vuelve a subirlos
+              </div>
+              {String(result.errorList).split('\n').filter(l => l.trim()).map((line, i) => {
+                const idx = line.indexOf(': ');
+                const name = idx > 0 ? line.slice(0, idx) : line;
+                const reason = idx > 0 ? line.slice(idx + 2) : '';
+                return (
+                  <div key={i} style={{ fontSize: '12px', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 600 }}>{name}</span>
+                    {reason && (
+                      <div style={{ color: 'var(--text-secondary)' }}>{reason}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {result.warnings && result.warnings.length > 0 && (
             <div style={{
               background: '#FFFFFF', border: '1px solid var(--alert-text)', borderRadius: 'var(--radius-lg)',
