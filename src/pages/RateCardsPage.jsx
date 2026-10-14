@@ -113,9 +113,12 @@ export default function RateCardsPage({ user }) {
     const ext = f.name.split('.').pop().toLowerCase();
     if (ext !== 'xlsx') {
       setUploadError('Solo se aceptan archivos Excel (.xlsx). Descarga la plantilla de arriba.');
+      setUploadStatus('error');
       return;
     }
     setUploadError('');
+    setUploadStatus('idle');
+    setUploadResult(null);
     setFile(f);
   }
 
@@ -125,6 +128,7 @@ export default function RateCardsPage({ user }) {
     setUploadError('');
     setUploadResult(null);
 
+    let res;
     try {
       const carrier = carriers.find(c => c.id === selectedCarrierId);
       const formData = new FormData();
@@ -138,22 +142,43 @@ export default function RateCardsPage({ user }) {
       formData.append('originalFileName', file.name);
 
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(TARIFARIO_WEBHOOK_URL, {
+      res = await fetch(TARIFARIO_WEBHOOK_URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session?.access_token}` },
         body: formData,
       });
-      if (!res.ok) throw new Error(`Server responded ${res.status}`);
-      const data = await res.json();
-      setUploadResult(data);
-      setUploadStatus('success');
-      setFile(null);
-      setSelectedCarrierId('');
-      loadRateCards();
     } catch (e) {
+      // No hubo respuesta del servidor (red caida, proxy inaccesible).
       setUploadError('No se pudo conectar con FRIA. Intenta de nuevo.');
       setUploadStatus('error');
+      return;
     }
+
+    // Si el servidor respondio, mostramos su mensaje real (por ejemplo, el
+    // error de validacion del archivo que devuelve n8n con codigo 400).
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = null;
+    }
+
+    if (!res.ok || !data || data.success === false) {
+      const serverMsg = data && (data.error || data.message);
+      setUploadError(
+        serverMsg
+          ? String(serverMsg)
+          : `FRIA respondió con un error (${res.status}). Intenta de nuevo o revisa el archivo.`
+      );
+      setUploadStatus('error');
+      return;
+    }
+
+    setUploadResult(data);
+    setUploadStatus('success');
+    setFile(null);
+    setSelectedCarrierId('');
+    loadRateCards();
   }
 
   useEffect(() => {
@@ -197,6 +222,12 @@ export default function RateCardsPage({ user }) {
     }
     loadLanes();
   }, []);
+
+  // Avisos de la carga exitosa: pueden llegar como arreglo de textos o como
+  // numero/otro formato, asi que se normalizan a una lista de textos.
+  const skippedList = Array.isArray(uploadResult?.skipped)
+    ? uploadResult.skipped.map(s => (typeof s === 'string' ? s : JSON.stringify(s)))
+    : [];
 
   return (
     <div>
@@ -350,13 +381,36 @@ export default function RateCardsPage({ user }) {
               </div>
 
               {uploadError && (
-                <div style={{ fontSize: '13px', color: 'var(--alert-text)' }}>{uploadError}</div>
+                <div style={{
+                  background: 'var(--alert-bg)', border: '1px solid var(--alert-text)', borderRadius: 'var(--radius-md)',
+                  padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '4px',
+                }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--alert-text)' }}>
+                    No se cargó el tarifario
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--alert-text)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {uploadError}
+                  </div>
+                </div>
               )}
 
               {uploadStatus === 'success' && uploadResult && (
                 <div style={{ fontSize: '12px', color: 'var(--success-text)' }}>
                   {uploadResult.inserted} tarifas cargadas.
-                  {uploadResult.skipped?.length > 0 && ` ${uploadResult.skipped.length} columna(s) de equipo no reconocidas — revisa el nombre.`}
+                </div>
+              )}
+
+              {uploadStatus === 'success' && skippedList.length > 0 && (
+                <div style={{
+                  background: '#FFF6E0', border: '1px solid #E0B24A', borderRadius: 'var(--radius-md)',
+                  padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '6px',
+                }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#8A5A00' }}>
+                    Se cargó, pero {skippedList.length} aviso(s) — revisa el archivo
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#8A5A00', lineHeight: 1.6 }}>
+                    {skippedList.map((s, i) => <li key={i}>{s}</li>)}
+                  </ul>
                 </div>
               )}
             </div>
